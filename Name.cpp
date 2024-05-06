@@ -58,10 +58,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		return FALSE;
 	}
 
-	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILD | SS_LEFT, 10, 10, 100, 100, hWnd, NULL, hInstance, NULL);
+	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW, 10, 10, 60, 20, hWnd, NULL, hInstance, NULL);
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
+
+	//Auto move the window to the top right of the screen
+	//Could make this a configurable default?
+	SetWindowPos(hWnd, NULL, 1200, 0, 0, 0, SWP_NOSIZE);
 
 	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_NAME));
 
@@ -169,7 +173,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.hInstance = hInstance;
 	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_NAME));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
 	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
 	wcex.lpszClassName = szWindowClass;
 	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
@@ -191,8 +195,8 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
 
-	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, 170, 80, nullptr, nullptr, hInstance, nullptr);
+	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
+		CW_USEDEFAULT, 0, 80, 35, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
@@ -219,10 +223,48 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 //  WM_DESTROY  - post a quit message and return
 //
 //
+
+static int xClick;
+static int yClick;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
+
+	case WM_LBUTTONDOWN:
+		//Restrict mouse input to current window
+		SetCapture(hWnd);
+
+		//Get the click position
+		xClick = LOWORD(lParam);
+		yClick = HIWORD(lParam);
+		break;
+
+	case WM_LBUTTONUP:
+		//Window no longer requires all mouse input
+		ReleaseCapture();
+		break;
+
+	case WM_MOUSEMOVE:
+	{
+		if (GetCapture() == hWnd)  //Check if this window has mouse input
+		{
+			//Get the window's screen coordinates
+			RECT rcWindow;
+			GetWindowRect(hWnd, &rcWindow);
+
+			//Get the current mouse coordinates
+			int xMouse = LOWORD(lParam);
+			int yMouse = HIWORD(lParam);
+
+			//Calculate the new window coordinates
+			int xWindow = rcWindow.left + xMouse - xClick;
+			int yWindow = rcWindow.top + yMouse - yClick;
+
+			//Set the window's new screen position (don't resize or change z-order)
+			SetWindowPos(hWnd, NULL, xWindow, yWindow, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+		}
+	}
 	case WM_COMMAND:
 	{
 		int wmId = LOWORD(wParam);
