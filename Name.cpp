@@ -91,7 +91,7 @@ void UpdateInfo()
 	{
 		ULONG64 speed = GetAdaptorInfo(hWnd);
 		speed /= 1048576.0f;
-		swprintf_s(buf, L"%llu", speed);
+		swprintf_s(buf, L"%llu mb/ps", speed);
 		SetWindowText(speedTxt, buf);
 		memset(buf, 0, 100);
 
@@ -119,12 +119,13 @@ ULONG64 GetAdaptorInfo(HWND hWnd)
 				row = &interfaces[0]->Table[i];
 				if (row)
 				{
+					//Find wireless interface
 					if (row->Type != IF_TYPE_IEEE80211)
 					{
 						continue;
 					}
 
-					cacheIndex = i;
+					cacheIndex = i; //Save the index so we can grab it immediately each time 
 					break;
 				}
 			}
@@ -137,45 +138,15 @@ ULONG64 GetAdaptorInfo(HWND hWnd)
 			{
 				return -1;
 			}
+
+			
 			ULONG64 ret = (row->InOctets * 8.0f) - lastCount;
 			lastCount = row->InOctets * 8.0f;
 
-			//ULONG64 ret = row->ReceiveLinkSpeed;
 			free(interfaces);
 			return ret;
 		}
 	}
-
-
-	//if (GetIfTable2(interfaces, &size, TRUE) != NO_ERROR)
-	//{
-	//	free(interfaces);
-
-	//	return -1;
-	//}
-	//MIB_IFROW* pIfRow;
-	//bool skipFirst = false;
-	//for (int i = 0; i < interfaces->dwNumEntries; i++)
-	//{
-
-	//	if (pIfRow->dwType == IF_TYPE_IEEE80211 && (pIfRow->dwOperStatus != IF_OPER_STATUS_DISCONNECTED && pIfRow->dwOperStatus != IF_OPER_STATUS_NON_OPERATIONAL))
-	//	{
-	//		DWORD ret = pIfRow->dwSpeed;
-	//		free(interfaces);
-	//		return ret;
-	//	}
-
-	/* if (!skipFirst && row.dwSpeed > 0)
-	 {
-		 skipFirst = true;
-	 }
-	 else if(row.dwSpeed > 0)
-	 {
-
-
-	 }*/
-	//}
-	/*free(interfaces);*/
 
 	return -1;
 }
@@ -199,7 +170,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_NAME));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.lpszMenuName = MAKEINTRESOURCEW(IDC_NAME);
+	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
 	wcex.lpszClassName = szWindowClass;
 	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
@@ -221,12 +192,16 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // Store instance handle in our global variable
 
 	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+		CW_USEDEFAULT, 0, 170, 80, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
 		return NULL;
 	}
+
+	DWORD currentStyle = GetWindowLong(hWnd, GWL_STYLE);
+
+	SetWindowLong(hWnd, GWL_STYLE, (currentStyle & ~WS_MAXIMIZEBOX & ~WS_MINIMIZEBOX));
 
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
