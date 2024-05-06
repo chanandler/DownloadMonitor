@@ -31,7 +31,7 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 HWND                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-ULONG64 GetAdaptorInfo(HWND hWnd);
+ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
 void UpdateInfo();
 HWND hWnd;
 HWND speedTxt;
@@ -86,37 +86,36 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 void UpdateInfo()
 {
-	int speed = GetAdaptorInfo(hWnd);
-
 	WCHAR buf[100];
-	swprintf_s(buf, L"%d", speed);
-
+	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
 	while (running)
 	{
-		ULONG64 speed = GetAdaptorInfo(hWnd);
+		ULONG64 speed = GetAdaptorInfo(hWnd, interfaces);
 		speed /= 1048576.0f;
-		swprintf_s(buf, L"%llu mb/ps", speed);
+		swprintf_s(buf, L"%llu Mb/ps", speed);
 		SetWindowText(speedTxt, buf);
 		memset(buf, 0, 100);
 
 		std::this_thread::sleep_for(std::chrono::microseconds(1000000));
 	}
+
+	free(interfaces);
 }
 
-ULONG64 GetAdaptorInfo(HWND hWnd)
+ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 {
-	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
-
 	if (!interfaces)
 	{
 		return -1;
 	}
 
+	ULONG64 ret = -1;
+
 	if (GetIfTable2(interfaces) == NO_ERROR)
 	{
 		MIB_IF_ROW2* row;
 
-		if (cacheIndex == -1) 
+		if (cacheIndex == -1)
 		{
 			for (int i = 0; i < interfaces[0]->NumEntries; i++)
 			{
@@ -135,24 +134,21 @@ ULONG64 GetAdaptorInfo(HWND hWnd)
 			}
 		}
 
-		if (cacheIndex != -1) 
+		if (cacheIndex != -1)
 		{
 			row = &interfaces[0]->Table[cacheIndex];
-			if (!row) 
+			if (row)
 			{
-				return -1;
+				ret = (row->InOctets * 8.0f) - lastCount;
+				lastCount = row->InOctets * 8.0f;
 			}
-
-			
-			ULONG64 ret = (row->InOctets * 8.0f) - lastCount;
-			lastCount = row->InOctets * 8.0f;
-
-			free(interfaces);
-			return ret;
 		}
 	}
 
-	return -1;
+	//GetIfTable2 allocates memory for the tables, which we must delete
+	FreeMibTable(interfaces[0]);
+
+	return ret;
 }
 
 //
