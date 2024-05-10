@@ -64,7 +64,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		return FALSE;
 	}
 
-	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 150, 20, hWnd, NULL, hInstance, NULL);
+	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 160, 20, hWnd, NULL, hInstance, NULL);
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
@@ -110,7 +110,7 @@ void UpdateInfo()
 
 		dl /= 1048576.0f; //1024 * 2
 		ul /= 1048576.0f; 
-		swprintf_s(buf, L"↓%llu Mbps | ↑%llu Mbps", dl, ul);
+		swprintf_s(buf, L"↓ %llu Mbps | ↑ %llu Mbps", dl, ul);
 		SetWindowText(speedTxt, buf);
 		memset(buf, 0, 100);
 
@@ -211,7 +211,7 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // Store instance handle in our global variable
 
 	HWND hWnd = CreateWindowEx(WS_EX_TOOLWINDOW, szWindowClass, szTitle, WS_POPUP,
-		CW_USEDEFAULT, 0, 175, 32, nullptr, nullptr, hInstance, nullptr);
+		CW_USEDEFAULT, 0, 180, 32, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
