@@ -1,7 +1,8 @@
-// Name.cpp : Defines the entry point for the application.
+﻿// Name.cpp : Defines the entry point for the application.
 //
 #pragma once
 #define WIN32_NO_STATUS
+#define WM_TRAYMESSAGE (WM_USER + 1)
 #include "framework.h"
 #include "Name.h"
 
@@ -16,6 +17,9 @@
 //#include "windows.h"
 
 #include "chrono"
+#include "shellapi.h"
+#include <windowsx.h>
+#include <tuple>
 
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
 #define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
@@ -31,12 +35,14 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 HWND                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
+std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
 void UpdateInfo();
 HWND hWnd;
 HWND speedTxt;
+NOTIFYICONDATA trayIcon;
 
-UINT64 lastCount = 0;
+UINT64 lastDlCount = 0;
+UINT64 lastUlCount = 0;
 int cacheIndex = -1;
 bool running = false;
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
@@ -51,14 +57,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_NAME, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
-	HWND hWnd = InitInstance(hInstance, nCmdShow);
+	hWnd = InitInstance(hInstance, nCmdShow);
 	// Perform application initialization:
 	if (hWnd == NULL)
 	{
 		return FALSE;
 	}
 
-	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW, 10, 10, 60, 20, hWnd, NULL, hInstance, NULL);
+	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 150, 20, hWnd, NULL, hInstance, NULL);
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
@@ -80,6 +86,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			DispatchMessage(&msg);
 		}
 	}
+
+	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
 	running = false;
 	return (int)msg.wParam;
 }
@@ -88,11 +96,21 @@ void UpdateInfo()
 {
 	WCHAR buf[100];
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
+	if (!interfaces)
+	{
+		SendMessage(hWnd, WM_CLOSE, NULL, NULL);
+		return;
+	}
 	while (running)
 	{
-		ULONG64 speed = GetAdaptorInfo(hWnd, interfaces);
-		speed /= 1048576.0f;
-		swprintf_s(buf, L"%llu Mb/ps", speed);
+		std::tuple<ULONG64, ULONG64> speedInfo = GetAdaptorInfo(hWnd, interfaces);
+
+		ULONG64 dl = std::get<0>(speedInfo);
+		ULONG64 ul = std::get<1>(speedInfo);
+
+		dl /= 1048576.0f; //1024 * 2
+		ul /= 1048576.0f; 
+		swprintf_s(buf, L"↓%llu Mbps | ↑%llu Mbps", dl, ul);
 		SetWindowText(speedTxt, buf);
 		memset(buf, 0, 100);
 
@@ -102,14 +120,10 @@ void UpdateInfo()
 	free(interfaces);
 }
 
-ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
+std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 {
-	if (!interfaces)
-	{
-		return -1;
-	}
-
-	ULONG64 ret = -1;
+	ULONG64 dl = -1;
+	ULONG64 ul = -1;
 
 	if (GetIfTable2(interfaces) == NO_ERROR)
 	{
@@ -123,7 +137,8 @@ ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 				if (row)
 				{
 					//Find wireless interface
-					if (row->Type != IF_TYPE_IEEE80211)
+					//if (row->Type != IF_TYPE_IEEE80211)
+					if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected /*|| row->Type != MIB_IF_TYPE_ETHERNET*/)
 					{
 						continue;
 					}
@@ -139,8 +154,12 @@ ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 			row = &interfaces[0]->Table[cacheIndex];
 			if (row)
 			{
-				ret = (row->InOctets * 8.0f) - lastCount;
-				lastCount = row->InOctets * 8.0f;
+				dl = (row->InOctets * 8.0f) - lastDlCount;
+				lastDlCount = row->InOctets * 8.0f;
+
+				ul = (row->OutOctets * 8.0f) - lastUlCount;
+				lastUlCount = row->OutOctets * 8.0f;
+
 			}
 		}
 	}
@@ -148,7 +167,7 @@ ULONG64 GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 	//GetIfTable2 allocates memory for the tables, which we must delete
 	FreeMibTable(interfaces[0]);
 
-	return ret;
+	return std::make_tuple(dl, ul);
 }
 
 //
@@ -191,8 +210,8 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
 
-	HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_POPUP,
-		CW_USEDEFAULT, 0, 80, 35, nullptr, nullptr, hInstance, nullptr);
+	HWND hWnd = CreateWindowEx(WS_EX_TOOLWINDOW, szWindowClass, szTitle, WS_POPUP,
+		CW_USEDEFAULT, 0, 175, 32, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
@@ -206,6 +225,18 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
+	//Tray icon
+	trayIcon.cbSize = sizeof(NOTIFYICONDATA);
+	trayIcon.hWnd = hWnd;
+	trayIcon.uID = 1;
+	trayIcon.uCallbackMessage = WM_TRAYMESSAGE;
+	trayIcon.uVersion = NOTIFYICON_VERSION;
+	trayIcon.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_SMALL));
+	LoadString(hInst, IDS_APP_TITLE, trayIcon.szTip, 128);
+	trayIcon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+	Shell_NotifyIcon(NIM_ADD, &trayIcon);
+
+	
 	return hWnd;
 }
 
@@ -220,12 +251,43 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 //
 //
 
+
+void OnSelectItem(int sel)
+{
+	if (sel == -1)
+	{
+		SendMessage(hWnd, WM_CLOSE, NULL, NULL);
+	}
+}
+
+
 static int xClick;
 static int yClick;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
+
+	case WM_TRAYMESSAGE:
+		switch (lParam)
+		{
+		case WM_RBUTTONDOWN:
+		{
+			POINT point;
+			GetCursorPos(&point);
+
+			HMENU menu = CreatePopupMenu();
+			AppendMenu(menu, MF_STRING, -1, L"Exit");
+			OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, hWnd, NULL));
+
+			break;
+		}
+		default:
+		{
+			return DefWindowProc(hWnd, message, wParam, lParam);
+		}
+		}
+		break;
 
 	case WM_LBUTTONDOWN:
 		//Restrict mouse input to current window
