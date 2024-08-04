@@ -1,117 +1,59 @@
-﻿// Name.cpp : Defines the entry point for the application.
-//
-#pragma once
-#define WIN32_NO_STATUS
-#define WM_TRAYMESSAGE (WM_USER + 1)
-#include "framework.h"
-#include "Name.h"
+﻿#include "UIManager.h"
 
-#include <winsock2.h>
-#include <windows.h>
-#include <ws2ipdef.h>
-#include <iphlpapi.h>
+UIManager* UIManager::instance = NULL;
 
-#include "iostream";
-#include "thread"
-//#include "Netioapi.h"
-//#include "windows.h"
 
-#include "chrono"
-#include "shellapi.h"
-#include <windowsx.h>
-#include <tuple>
-
-#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
-#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
-#define MAX_LOADSTRING 100
-
-// Global Variables:
-HINSTANCE hInst;                                // current instance
-WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-
-// Forward declarations of functions included in this code module:
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-HWND                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
-void UpdateInfo();
-HWND hWnd;
-HWND speedTxt;
-NOTIFYICONDATA trayIcon;
-
-UINT64 lastDlCount = 0;
-UINT64 lastUlCount = 0;
-int cacheIndex = -1;
-bool running = false;
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-	_In_opt_ HINSTANCE hPrevInstance,
-	_In_ LPWSTR    lpCmdLine,
-	_In_ int       nCmdShow)
+UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
-	UNREFERENCED_PARAMETER(hPrevInstance);
-	UNREFERENCED_PARAMETER(lpCmdLine);
+	instance = this;
 
 	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_NAME, szWindowClass, MAX_LOADSTRING);
 	MyRegisterClass(hInstance);
-	hWnd = InitInstance(hInstance, nCmdShow);
+	roothWnd = InitInstance(hInstance, nCmdShow);
 	// Perform application initialization:
-	if (hWnd == NULL)
+	if (roothWnd == NULL)
 	{
-		return FALSE;
+		return;
 	}
 
-	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 160, 20, hWnd, NULL, hInstance, NULL);
+	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 160, 20, roothWnd, NULL, hInstance, NULL);
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
 
 	//Auto move the window to the top right of the screen
 	//Could make this a configurable default?
-	SetWindowPos(hWnd, NULL, 1200, 0, 0, 0, SWP_NOSIZE);
-
-	HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_NAME));
-
-	MSG msg;
-	running = true;
-	// Main message loop:
-	while (GetMessage(&msg, nullptr, 0, 0))
-	{
-		if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-		{
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-		}
-	}
-
-	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
-	running = false;
-	return (int)msg.wParam;
+	SetWindowPos(roothWnd, HWND_TOPMOST, 1200, 0, 0, 0, SWP_NOSIZE);
 }
 
-void UpdateInfo()
+UIManager::~UIManager()
+{
+	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
+	running = false;
+}
+
+void UIManager::UpdateInfo()
 {
 	WCHAR buf[100];
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
 	if (!interfaces)
 	{
-		SendMessage(hWnd, WM_CLOSE, NULL, NULL);
+		SendMessage(instance->roothWnd, WM_CLOSE, NULL, NULL);
 		return;
 	}
-	while (running)
+	while (instance->running)
 	{
-		std::tuple<ULONG64, ULONG64> speedInfo = GetAdaptorInfo(hWnd, interfaces);
+		std::tuple<ULONG64, ULONG64> speedInfo = instance->GetAdaptorInfo(instance->roothWnd, interfaces);
 
 		ULONG64 dl = std::get<0>(speedInfo);
 		ULONG64 ul = std::get<1>(speedInfo);
 
 		dl /= 1048576.0f; //1024 * 2
-		ul /= 1048576.0f; 
+		ul /= 1048576.0f;
 		swprintf_s(buf, L"↓ %llu Mbps | ↑ %llu Mbps", dl, ul);
-		SetWindowText(speedTxt, buf);
+		SetWindowText(instance->speedTxt, buf);
 		memset(buf, 0, 100);
 
 		std::this_thread::sleep_for(std::chrono::microseconds(1000000));
@@ -120,7 +62,7 @@ void UpdateInfo()
 	free(interfaces);
 }
 
-std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
+std::tuple<ULONG64, ULONG64> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 {
 	ULONG64 dl = -1;
 	ULONG64 ul = -1;
@@ -170,12 +112,7 @@ std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interface
 	return std::make_tuple(dl, ul);
 }
 
-//
-//  FUNCTION: MyRegisterClass()
-//
-//  PURPOSE: Registers the window class.
-//
-ATOM MyRegisterClass(HINSTANCE hInstance)
+ATOM UIManager::MyRegisterClass(HINSTANCE hInstance)
 {
 	WNDCLASSEXW wcex;
 
@@ -196,17 +133,8 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	return RegisterClassExW(&wcex);
 }
 
-//
-//   FUNCTION: InitInstance(HINSTANCE, int)
-//
-//   PURPOSE: Saves instance handle and creates main window
-//
-//   COMMENTS:
-//
-//        In this function, we save the instance handle in a global variable and
-//        create and display the main program window.
-//
-HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
+
+HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
 
@@ -236,38 +164,24 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 	trayIcon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
 	Shell_NotifyIcon(NIM_ADD, &trayIcon);
 
-	
+
 	return hWnd;
 }
 
-//
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE: Processes messages for the main window.
-//
-//  WM_COMMAND  - process the application menu
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
-//
-//
-
-
-void OnSelectItem(int sel)
+void UIManager::OnSelectItem(int sel)
 {
 	if (sel == -1)
 	{
-		SendMessage(hWnd, WM_CLOSE, NULL, NULL);
+		SendMessage(roothWnd, WM_CLOSE, NULL, NULL);
 	}
 }
 
-
 static int xClick;
 static int yClick;
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
-
 	case WM_TRAYMESSAGE:
 		switch (lParam)
 		{
@@ -278,7 +192,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			HMENU menu = CreatePopupMenu();
 			AppendMenu(menu, MF_STRING, -1, L"Exit");
-			OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, hWnd, NULL));
+			SetForegroundWindow(instance->roothWnd); //TrackPopupMenu requires the parent window to be in foreground, otherwise the popupmenu won't be destroyed when clicking off it
+			instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
 
 			break;
 		}
@@ -296,6 +211,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		//Get the click position
 		xClick = LOWORD(lParam);
 		yClick = HIWORD(lParam);
+
+
 		break;
 
 	case WM_LBUTTONUP:
@@ -320,7 +237,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			int yWindow = rcWindow.top + yMouse - yClick;
 
 			//Set the window's new screen position (don't resize or change z-order)
-			SetWindowPos(hWnd, NULL, xWindow, yWindow, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+			SetWindowPos(hWnd, HWND_TOPMOST, xWindow, yWindow, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 		}
 	}
 	case WM_COMMAND:
@@ -330,7 +247,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		switch (wmId)
 		{
 		case IDM_ABOUT:
-			DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, About);
 			break;
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
@@ -358,7 +275,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 // Message handler for about box.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK UIManager::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
