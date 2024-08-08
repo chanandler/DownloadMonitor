@@ -31,8 +31,8 @@ private:
 	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
-	UINT64 lastDlCount = -1;
-	UINT64 lastUlCount = -1;
+	double lastDlCount = -1.0;
+	double lastUlCount = -1.0;
 	int cacheIndex = -1;
 	bool running = false;
 
@@ -41,7 +41,7 @@ private:
 	NOTIFYICONDATA trayIcon;
 
 	static void UpdateInfo();
-	std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
+	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
 	ATOM MyRegisterClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void OnSelectItem(int sel);

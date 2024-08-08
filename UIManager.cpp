@@ -18,7 +18,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
-	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 160, 20, roothWnd, NULL, hInstance, NULL);
+	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 200, 20, roothWnd, NULL, hInstance, NULL);
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
@@ -45,21 +45,21 @@ void UIManager::UpdateInfo()
 	}
 	while (instance->running)
 	{
-		std::tuple<ULONG64, ULONG64> speedInfo = instance->GetAdaptorInfo(instance->roothWnd, interfaces);
+		std::tuple<double, double> speedInfo = instance->GetAdaptorInfo(instance->roothWnd, interfaces);
 
-		ULONG64 dl = std::get<0>(speedInfo);
-		ULONG64 ul = std::get<1>(speedInfo);
+		double dl = std::get<0>(speedInfo);
+		double ul = std::get<1>(speedInfo);
 
-		ULONG dlMbps = dl / DIV_FACTOR;
-		ULONG ulMbps = ul / DIV_FACTOR;
+		double dlMbps = dl / DIV_FACTOR;
+		double ulMbps = ul / DIV_FACTOR;
 		
 		bool dlKbps = false;
 		bool ulKbps = false;
 
 		//If <1 Mbps, display as Kbps
-		if(dlMbps == 0)
+		if(dlMbps < 1.0)
 		{
-			dl /= 1024.0f;
+			dl /= 1024.0;
 			dlKbps = true;
 		}
 		else 
@@ -67,9 +67,10 @@ void UIManager::UpdateInfo()
 			dl = dlMbps;
 		}
 
-		if (ulMbps == 0) {
+		if (ulMbps < 1.0) 
+		{
 
-			ul /= 1024.0f;
+			ul /= 1024.0;
 			ulKbps = true;
 		}
 		else 
@@ -77,7 +78,7 @@ void UIManager::UpdateInfo()
 			ul = ulMbps;
 		}
 		
-		swprintf_s(buf, L"↓ %llu %s | ↑ %llu %s", dl, dlKbps ? L"Kbps" : L"Mbps", ul, ulKbps ? L"Kbps" : L"Mbps");
+		swprintf_s(buf, L"↓ %.1lf %s | ↑ %.1lf %s", dl, dlKbps ? L"Kbps" : L"Mbps", ul, ulKbps ? L"Kbps" : L"Mbps");
 		SetWindowText(instance->speedTxt, buf);
 		memset(buf, 0, 100);
 
@@ -87,10 +88,10 @@ void UIManager::UpdateInfo()
 	free(interfaces);
 }
 
-std::tuple<ULONG64, ULONG64> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
+std::tuple<double, double> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
 {
-	ULONG64 dl = -1;
-	ULONG64 ul = -1;
+	double dl = -1.0;
+	double ul = -1.0;
 
 	if (GetIfTable2(interfaces) == NO_ERROR)
 	{
@@ -122,8 +123,8 @@ std::tuple<ULONG64, ULONG64> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2
 			if (row)
 			{
 				//Convert to bits
-				ULONG64 dlBits = (row->InOctets * 8.0f);
-				if (lastDlCount == -1) //Fix massive delta when first running program and lastDl/UlCount is not set
+				double dlBits = (row->InOctets * 8.0);
+				if (lastDlCount == -1.0) //Fix massive delta when first running program and lastDl/UlCount is not set
 				{
 					lastDlCount = dlBits;
 				}
@@ -131,9 +132,9 @@ std::tuple<ULONG64, ULONG64> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2
 				dl = dlBits - lastDlCount;
 				lastDlCount = dlBits;
 
-				ULONG64 ulBits = (row->OutOctets * 8.0f);
+				double ulBits = (row->OutOctets * 8.0);
 
-				if (lastUlCount == -1)
+				if (lastUlCount == -1.0)
 				{
 					lastUlCount = ulBits;
 				}
@@ -176,7 +177,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // Store instance handle in our global variable
 
 	HWND hWnd = CreateWindowEx(WS_EX_TOOLWINDOW, szWindowClass, szTitle, WS_POPUP,
-		CW_USEDEFAULT, 0, 180, 32, nullptr, nullptr, hInstance, nullptr);
+		CW_USEDEFAULT, 0, 220, 32, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
@@ -272,7 +273,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			int xWindow = rcWindow.left + xMouse - xClick;
 			int yWindow = rcWindow.top + yMouse - yClick;
 
-			//Set the window's new screen position (don't resize or change z-order)
+			//Set the window's new screen position
 			SetWindowPos(hWnd, HWND_TOPMOST, xWindow, yWindow, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 		}
 	}
