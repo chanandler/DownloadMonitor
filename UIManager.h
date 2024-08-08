@@ -17,6 +17,8 @@
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
+#define DIV_FACTOR (1024.0f * 1024.0f)
+#define ONE_SECOND 1000000
 
 class UIManager
 {
@@ -29,8 +31,8 @@ private:
 	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
-	UINT64 lastDlCount = 0;
-	UINT64 lastUlCount = 0;
+	UINT64 lastDlCount = -1;
+	UINT64 lastUlCount = -1;
 	int cacheIndex = -1;
 	bool running = false;
 

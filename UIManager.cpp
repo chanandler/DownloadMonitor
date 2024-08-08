@@ -50,13 +50,38 @@ void UIManager::UpdateInfo()
 		ULONG64 dl = std::get<0>(speedInfo);
 		ULONG64 ul = std::get<1>(speedInfo);
 
-		dl /= 1048576.0f; //1024 * 2
-		ul /= 1048576.0f;
-		swprintf_s(buf, L"↓ %llu Mbps | ↑ %llu Mbps", dl, ul);
+		ULONG dlMbps = dl / DIV_FACTOR;
+		ULONG ulMbps = ul / DIV_FACTOR;
+		
+		bool dlKbps = false;
+		bool ulKbps = false;
+
+		//If <1 Mbps, display as Kbps
+		if(dlMbps == 0)
+		{
+			dl /= 1024.0f;
+			dlKbps = true;
+		}
+		else 
+		{
+			dl = dlMbps;
+		}
+
+		if (ulMbps == 0) {
+
+			ul /= 1024.0f;
+			ulKbps = true;
+		}
+		else 
+		{
+			ul = ulMbps;
+		}
+		
+		swprintf_s(buf, L"↓ %llu %s | ↑ %llu %s", dl, dlKbps ? L"Kbps" : L"Mbps", ul, ulKbps ? L"Kbps" : L"Mbps");
 		SetWindowText(instance->speedTxt, buf);
 		memset(buf, 0, 100);
 
-		std::this_thread::sleep_for(std::chrono::microseconds(1000000));
+		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
 	}
 
 	free(interfaces);
@@ -96,12 +121,25 @@ std::tuple<ULONG64, ULONG64> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2
 			row = &interfaces[0]->Table[cacheIndex];
 			if (row)
 			{
-				dl = (row->InOctets * 8.0f) - lastDlCount;
-				lastDlCount = row->InOctets * 8.0f;
+				//Convert to bits
+				ULONG64 dlBits = (row->InOctets * 8.0f);
+				if (lastDlCount == -1) //Fix massive delta when first running program and lastDl/UlCount is not set
+				{
+					lastDlCount = dlBits;
+				}
 
-				ul = (row->OutOctets * 8.0f) - lastUlCount;
-				lastUlCount = row->OutOctets * 8.0f;
+				dl = dlBits - lastDlCount;
+				lastDlCount = dlBits;
 
+				ULONG64 ulBits = (row->OutOctets * 8.0f);
+
+				if (lastUlCount == -1)
+				{
+					lastUlCount = ulBits;
+				}
+
+				ul = ulBits - lastUlCount;
+				lastUlCount = ulBits;
 			}
 		}
 	}
@@ -133,7 +171,6 @@ ATOM UIManager::MyRegisterClass(HINSTANCE hInstance)
 	return RegisterClassExW(&wcex);
 }
 
-
 HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
@@ -163,7 +200,6 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	LoadString(hInst, IDS_APP_TITLE, trayIcon.szTip, 128);
 	trayIcon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
 	Shell_NotifyIcon(NIM_ADD, &trayIcon);
-
 
 	return hWnd;
 }
@@ -261,7 +297,6 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
-		// TODO: Add any drawing code that uses hdc here...
 		EndPaint(hWnd, &ps);
 	}
 	break;
@@ -274,7 +309,6 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	return 0;
 }
 
-// Message handler for about box.
 INT_PTR CALLBACK UIManager::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
