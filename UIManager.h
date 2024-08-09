@@ -17,35 +17,43 @@
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
-#define DIV_FACTOR (1024.0f * 1024.0f)
+#define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define ONE_SECOND 1000000
 
 class UIManager
 {
 public:
 	static UIManager* instance;
+	static class NetworkManager* netManager;
+
 	UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow);
 	~UIManager();
 private:
 	HINSTANCE hInst;                                // current instance
 	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
+	WCHAR szChildStaticWindowClass[MAX_LOADSTRING];
 
-	double lastDlCount = -1.0;
-	double lastUlCount = -1.0;
-	int cacheIndex = -1;
 	bool running = false;
 
 	HWND roothWnd;
-	HWND speedTxt;
+
+	WCHAR dlBuf[200];
+	WCHAR ulBuf[200];
+
+	HWND dlChildWindow;
+	HWND ulChildWindow;
+
 	NOTIFYICONDATA trayIcon;
 
 	static void UpdateInfo();
 	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
-	ATOM MyRegisterClass(HINSTANCE hInstance);
+	ATOM RegisterWindowClass(HINSTANCE hInstance);
+	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };
 

@@ -1,16 +1,21 @@
 ﻿#include "UIManager.h"
+#include "NetworkManager.h"
 
 UIManager* UIManager::instance = NULL;
+NetworkManager* UIManager::netManager = NULL;
 
 
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
 	instance = this;
+	netManager = new NetworkManager();
 
 	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-	LoadStringW(hInstance, IDC_NAME, szWindowClass, MAX_LOADSTRING);
-	MyRegisterClass(hInstance);
+	LoadStringW(hInstance, IDC_DOWNLOAD_APP, szWindowClass, MAX_LOADSTRING);
+	LoadStringW(hInstance, IDC_CHILD_STATIC_NAME, szChildStaticWindowClass, MAX_LOADSTRING);
+	RegisterWindowClass(hInstance);
+	ATOM a = RegisterChildWindowClass(hInstance);
 	roothWnd = InitInstance(hInstance, nCmdShow);
 	// Perform application initialization:
 	if (roothWnd == NULL)
@@ -18,7 +23,15 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
-	speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 200, 20, roothWnd, NULL, hInstance, NULL);
+	//speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 200, 20, roothWnd, NULL, hInstance, NULL);
+
+
+	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED",  WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 10, 100, 20, roothWnd, NULL, hInstance, NULL);
+	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 10, 100, 20, roothWnd, NULL, hInstance, NULL);
+
+	/*dlTxt = CreateWindow(L"TEXT", L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_OWNERDRAW, 0, 0, 200, 20, dlParent, NULL, hInstance, NULL);
+	ulTxt = CreateWindow(L"STATIC", L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_OWNERDRAW, 0, 0, 200, 20, ulParent, NULL, hInstance, NULL);*/
+
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
@@ -32,11 +45,13 @@ UIManager::~UIManager()
 {
 	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
 	running = false;
+	delete netManager;
 }
 
 void UIManager::UpdateInfo()
 {
-	WCHAR buf[100];
+	WCHAR dlBuf[100];
+	WCHAR ulBuf[100];
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
 	if (!interfaces)
 	{
@@ -45,42 +60,47 @@ void UIManager::UpdateInfo()
 	}
 	while (instance->running)
 	{
-		std::tuple<double, double> speedInfo = instance->GetAdaptorInfo(instance->roothWnd, interfaces);
+		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces);
 
 		double dl = std::get<0>(speedInfo);
 		double ul = std::get<1>(speedInfo);
 
 		double dlMbps = dl / DIV_FACTOR;
 		double ulMbps = ul / DIV_FACTOR;
-		
+
 		bool dlKbps = false;
 		bool ulKbps = false;
 
 		//If <1 Mbps, display as Kbps
-		if(dlMbps < 1.0)
+		if (dlMbps < 1.0)
 		{
-			dl /= 1024.0;
+			dl /= KILOBYTE;
 			dlKbps = true;
 		}
-		else 
+		else
 		{
 			dl = dlMbps;
 		}
 
-		if (ulMbps < 1.0) 
+		if (ulMbps < 1.0)
 		{
 
-			ul /= 1024.0;
+			ul /= KILOBYTE;
 			ulKbps = true;
 		}
-		else 
+		else
 		{
 			ul = ulMbps;
 		}
-		
-		swprintf_s(buf, L"↓ %.1lf %s | ↑ %.1lf %s", dl, dlKbps ? L"Kbps" : L"Mbps", ul, ulKbps ? L"Kbps" : L"Mbps");
-		SetWindowText(instance->speedTxt, buf);
-		memset(buf, 0, 100);
+
+		swprintf_s(dlBuf, L"↓ %.1lf %s", dl, dlKbps ? L"kbps" : L"Mbps");
+		swprintf_s(ulBuf, L"↑ %.1lf %s",ul, ulKbps ? L"kbps" : L"Mbps");
+
+		SetWindowText(instance->dlChildWindow, dlBuf);
+		SetWindowText(instance->ulChildWindow, ulBuf);
+
+		memset(dlBuf, 0, 100);
+		memset(ulBuf, 0, 100);
 
 		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
 	}
@@ -88,70 +108,7 @@ void UIManager::UpdateInfo()
 	free(interfaces);
 }
 
-std::tuple<double, double> UIManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
-{
-	double dl = -1.0;
-	double ul = -1.0;
-
-	if (GetIfTable2(interfaces) == NO_ERROR)
-	{
-		MIB_IF_ROW2* row;
-
-		if (cacheIndex == -1)
-		{
-			for (int i = 0; i < interfaces[0]->NumEntries; i++)
-			{
-				row = &interfaces[0]->Table[i];
-				if (row)
-				{
-					//Find wireless interface
-					//if (row->Type != IF_TYPE_IEEE80211)
-					if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected /*|| row->Type != MIB_IF_TYPE_ETHERNET*/)
-					{
-						continue;
-					}
-
-					cacheIndex = i; //Save the index so we can grab it immediately each time 
-					break;
-				}
-			}
-		}
-
-		if (cacheIndex != -1)
-		{
-			row = &interfaces[0]->Table[cacheIndex];
-			if (row)
-			{
-				//Convert to bits
-				double dlBits = (row->InOctets * 8.0);
-				if (lastDlCount == -1.0) //Fix massive delta when first running program and lastDl/UlCount is not set
-				{
-					lastDlCount = dlBits;
-				}
-
-				dl = dlBits - lastDlCount;
-				lastDlCount = dlBits;
-
-				double ulBits = (row->OutOctets * 8.0);
-
-				if (lastUlCount == -1.0)
-				{
-					lastUlCount = ulBits;
-				}
-
-				ul = ulBits - lastUlCount;
-				lastUlCount = ulBits;
-			}
-		}
-	}
-
-	//GetIfTable2 allocates memory for the tables, which we must delete
-	FreeMibTable(interfaces[0]);
-
-	return std::make_tuple(dl, ul);
-}
-
-ATOM UIManager::MyRegisterClass(HINSTANCE hInstance)
+ATOM UIManager::RegisterWindowClass(HINSTANCE hInstance)
 {
 	WNDCLASSEXW wcex;
 
@@ -162,27 +119,50 @@ ATOM UIManager::MyRegisterClass(HINSTANCE hInstance)
 	wcex.cbClsExtra = 0;
 	wcex.cbWndExtra = 0;
 	wcex.hInstance = hInstance;
-	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_NAME));
+	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_LOGO));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
 	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
 	wcex.lpszClassName = szWindowClass;
-	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_LOGO));
 
-	return RegisterClassExW(&wcex);
+	return RegisterClassEx(&wcex);
+}
+
+ATOM UIManager::RegisterChildWindowClass(HINSTANCE hInstance)
+{
+	WNDCLASSEXW wcex;
+
+	wcex.cbSize = sizeof(WNDCLASSEX);
+
+	wcex.style = CS_HREDRAW | CS_VREDRAW | WS_EX_CLIENTEDGE;
+	wcex.lpfnWndProc = ChildProc;
+	wcex.cbClsExtra = 0;
+	wcex.cbWndExtra = 0;
+	wcex.hInstance = hInstance;
+	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_LOGO));
+	wcex.hCursor = NULL;
+	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
+	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
+	wcex.lpszClassName = szChildStaticWindowClass;
+	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_LOGO));
+
+	return RegisterClassEx(&wcex);
 }
 
 HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
 	hInst = hInstance; // Store instance handle in our global variable
 
-	HWND hWnd = CreateWindowEx(WS_EX_TOOLWINDOW, szWindowClass, szTitle, WS_POPUP,
+	HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE, szWindowClass, szTitle, WS_POPUP,
 		CW_USEDEFAULT, 0, 220, 32, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
 		return NULL;
 	}
+													//Opacity
+	SetLayeredWindowAttributes(hWnd, RGB(50, 50, 50), 235, LWA_COLORKEY | LWA_ALPHA);
 
 	DWORD currentStyle = GetWindowLong(hWnd, GWL_STYLE);
 
@@ -197,7 +177,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	trayIcon.uID = 1;
 	trayIcon.uCallbackMessage = WM_TRAYMESSAGE;
 	trayIcon.uVersion = NOTIFYICON_VERSION;
-	trayIcon.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_SMALL));
+	trayIcon.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_LOGO));
 	LoadString(hInst, IDS_APP_TITLE, trayIcon.szTip, 128);
 	trayIcon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
 	Shell_NotifyIcon(NIM_ADD, &trayIcon);
@@ -211,10 +191,70 @@ void UIManager::OnSelectItem(int sel)
 	{
 		SendMessage(roothWnd, WM_CLOSE, NULL, NULL);
 	}
+	if (sel == 0)
+	{
+		DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, About);
+	}
 }
 
-static int xClick;
-static int yClick;
+//For child windows which hold DL/UL texts
+LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_COMMAND:
+	{
+		break;
+	}
+	//Pass these on to the root window
+	case WM_LBUTTONDOWN:
+		WndProc(instance->roothWnd, message, wParam, lParam);
+		break;
+	case WM_LBUTTONUP:
+		WndProc(instance->roothWnd, message, wParam, lParam);
+		break;
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hWnd, &ps);				//CHILD WINDOW BACKGROUND COLOUR
+		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(RGB(252, 248, 188)));
+		SetBkMode(hdc, TRANSPARENT);
+		if (hWnd == instance->dlChildWindow)
+		{
+			SetTextColor(hdc, RGB(200, 10, 10));
+			DrawText(hdc, instance->dlBuf, lstrlenW(instance->dlBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
+		}
+		else if (hWnd == instance->ulChildWindow)
+		{
+			SetTextColor(hdc, RGB(10, 200, 10));
+			DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
+		}
+		EndPaint(hWnd, &ps);
+		break;
+	}
+	case WM_SETTEXT:
+	{
+		//Intercept this message and handle it ourselves
+		LPWSTR msg = (LPWSTR)lParam;
+
+		if (hWnd == instance->dlChildWindow) 
+		{
+			wcscpy(instance->dlBuf, msg);
+		}
+		else if (hWnd == instance->ulChildWindow)
+		{
+			wcscpy(instance->ulBuf, msg);
+		}
+		RECT rc;
+		GetClientRect(hWnd, &rc);
+		//Force a repaint (Will call WM_PAINT)
+		InvalidateRect(hWnd, &rc, FALSE);
+		break;
+	}
+	}
+	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
 LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -229,6 +269,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			HMENU menu = CreatePopupMenu();
 			AppendMenu(menu, MF_STRING, -1, L"Exit");
+			AppendMenu(menu, MF_STRING, 0, L"About");
 			SetForegroundWindow(instance->roothWnd); //TrackPopupMenu requires the parent window to be in foreground, otherwise the popupmenu won't be destroyed when clicking off it
 			instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
 
@@ -241,15 +282,22 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		}
 		break;
 
+	case WM_CONTEXTMENU:
+	{
+		POINT point;
+		GetCursorPos(&point);
+
+		HMENU menu = CreatePopupMenu();
+		AppendMenu(menu, MF_STRING, -1, L"Exit");
+		AppendMenu(menu, MF_STRING, 0, L"About");
+		SetForegroundWindow(instance->roothWnd); //TrackPopupMenu requires the parent window to be in foreground, otherwise the popupmenu won't be destroyed when clicking off it
+		instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
+		break;
+	}
+
 	case WM_LBUTTONDOWN:
 		//Restrict mouse input to current window
 		SetCapture(hWnd);
-
-		//Get the click position
-		xClick = LOWORD(lParam);
-		yClick = HIWORD(lParam);
-
-
 		break;
 
 	case WM_LBUTTONUP:
@@ -261,20 +309,21 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	{
 		if (GetCapture() == hWnd)  //Check if this window has mouse input
 		{
-			//Get the window's screen coordinates
-			RECT rcWindow;
-			GetWindowRect(hWnd, &rcWindow);
+			RECT windowRect;
+			POINT mousePos;
+			GetWindowRect(hWnd, &windowRect);
 
 			//Get the current mouse coordinates
-			int xMouse = LOWORD(lParam);
-			int yMouse = HIWORD(lParam);
+			mousePos.x = (int)(short)LOWORD(lParam);
+			mousePos.y = (int)(short)HIWORD(lParam);
 
-			//Calculate the new window coordinates
-			int xWindow = rcWindow.left + xMouse - xClick;
-			int yWindow = rcWindow.top + yMouse - yClick;
+			int windowHeight = windowRect.bottom - windowRect.top;
+			int windowWidth = windowRect.right - windowRect.left;
+
+			ClientToScreen(hWnd, &mousePos);
 
 			//Set the window's new screen position
-			SetWindowPos(hWnd, HWND_TOPMOST, xWindow, yWindow, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+			MoveWindow(hWnd, mousePos.x - (windowWidth / 2), mousePos.y, windowWidth, windowHeight, TRUE);
 		}
 	}
 	case WM_COMMAND:
@@ -297,17 +346,16 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
+		HDC hdc = BeginPaint(hWnd, &ps);			//BACKGROUND COLOUR
+		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(RGB(245,242,109)));
 		EndPaint(hWnd, &ps);
 	}
 	break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
-	default:
-		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
-	return 0;
+	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 INT_PTR CALLBACK UIManager::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
