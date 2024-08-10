@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <tuple>
 
 #define CONFIG_NAME "config.cfg"
 
@@ -22,17 +23,22 @@ class ConfigManager
 
 private:
 	void InitDefaults();
-	void WriteColourData();
+	void WriteData();
 	void ReadData();
+	std::tuple<int, int> ProcessCoords(char* dataStart);
 	COLORREF ProcessRGB(char* dataStart);
 	void CopyRange(char* start, char* end, char* buf, int size);
 public:
+
+	int lastX, lastY;
 	void ResetColours();
 
 	ConfigManager();
 	~ConfigManager();
 	void UpdateForegroundColour(COLORREF fg_col);
 	void UpdateChildColour(COLORREF ch_col);
+
+	void UpdateWindowPos(int x, int y);
 
 	COLORREF foregroundColour;
 	COLORREF childColour;

@@ -18,7 +18,7 @@ public:
     }
 };
 
-const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\n";
+const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0";
 
 ConfigManager::ConfigManager()
 {
@@ -33,16 +33,23 @@ ConfigManager::~ConfigManager()
 void ConfigManager::UpdateForegroundColour(COLORREF fg_col)
 {
     foregroundColour = fg_col;
-    WriteColourData();
+    WriteData();
 }
 
 void ConfigManager::UpdateChildColour(COLORREF ch_col)
 {
     childColour = ch_col;
-    WriteColourData();
+    WriteData();
 }
 
-void ConfigManager::WriteColourData()
+void ConfigManager::UpdateWindowPos(int x, int y)
+{
+    lastX = x;
+    lastY = y;
+    WriteData();
+}
+
+void ConfigManager::WriteData()
 {
     int fg_r = GetRValue(foregroundColour);
     int fg_g = GetGValue(foregroundColour);
@@ -59,14 +66,16 @@ void ConfigManager::WriteColourData()
     char fg_Buf[200];
     sprintf_s(fg_Buf, "%s=%i,%i,%i", FOREGROUND_COLOUR, fg_RGB->r, fg_RGB->g, fg_RGB->b);
 
-
     char ch_Buf[200];
     sprintf_s(ch_Buf, "%s=%i,%i,%i", CHILD_COLOUR, ch_RGB->r, ch_RGB->g, ch_RGB->b);
+
+    char lp_Buf[200];
+    sprintf_s(lp_Buf, "%s=%i,%i", LAST_POS, lastX, lastY);
 
     std::ofstream configFile(CONFIG_NAME);
 
     // Write to the file
-    configFile << fg_Buf << "\n" << ch_Buf << "\n";
+    configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n";
 
     // Close the file
     configFile.close();
@@ -95,6 +104,14 @@ void ConfigManager::ReadData()
             childColour = ProcessRGB(dataStart);
             readData = true;
         }
+        else if (!strncmp(output.c_str(), LAST_POS, 8))
+        {
+            char* dataStart = strchr((char*)output.c_str(), '=');
+            std::tuple<int,int> coords = ProcessCoords(dataStart);
+            lastX = std::get<0>(coords);
+            lastY = std::get<1>(coords);
+            readData = true;
+        }
     }
 
     configFile.close();
@@ -102,7 +119,58 @@ void ConfigManager::ReadData()
     if(!readData)
     {
         InitDefaults();
+        ReadData();
     }
+}
+
+std::tuple<int, int> ConfigManager::ProcessCoords(char* dataStart)
+{
+    ++dataStart;
+    char* prevGood = dataStart;
+    char* nxt = strchr(dataStart, ',');
+    int colIndex = 0;
+
+    char xBuf[100];
+    xBuf[99] = 0;
+
+    char yBuf[100];
+    yBuf[99] = 0;
+
+    bool atEnd = false;
+
+    while (nxt)
+    {
+        char* writeDest;
+
+        if (colIndex == 0)
+        {
+            writeDest = &xBuf[0];
+        }
+        else if (colIndex == 1)
+        {
+            writeDest = &yBuf[0];
+        }
+        else
+        {
+            break;
+        }
+
+        CopyRange(prevGood, nxt, writeDest, 100);
+        nxt++;
+        prevGood = nxt;
+        nxt = strchr(nxt, ',');
+        if (!nxt && !atEnd)
+        {
+            atEnd = true;
+            nxt = &dataStart[strlen(dataStart)];
+        }
+        ++colIndex;
+    }
+
+    int x = atoi(xBuf);
+    int y = atoi(yBuf);
+
+    return std::make_tuple(x, y);
 }
 
 //PURPOSE: Read comma seperated RGB value and construct into COLOREF
@@ -180,10 +248,8 @@ void ConfigManager::InitDefaults()
 {
     std::ofstream newConfigFile(CONFIG_NAME);
 
-    // Write to the file
     newConfigFile << defaultConfig;
 
-    // Close the file
     newConfigFile.close();
 }
 

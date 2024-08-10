@@ -23,31 +23,6 @@
 
 #include "UIManager.h"
 
-#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
-#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
-#define MAX_LOADSTRING 100
-
-// Global Variables:
-HINSTANCE hInst;                                // current instance
-WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-
-// Forward declarations of functions included in this code module:
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-HWND                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-std::tuple<ULONG64, ULONG64> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
-void UpdateInfo();
-HWND hWnd;
-HWND speedTxt;
-NOTIFYICONDATA trayIcon;
-
-UINT64 lastDlCount = 0;
-UINT64 lastUlCount = 0;
-int cacheIndex = -1;
-bool running = false;
-
 
 //TODO:
 //Save last window pos

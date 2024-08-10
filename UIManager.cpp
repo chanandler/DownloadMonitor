@@ -36,7 +36,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 
 	//Auto move the window to the top right of the screen
 	//Could make this a configurable default?
-	SetWindowPos(roothWnd, HWND_TOPMOST, 1200, 0, 0, 0, SWP_NOSIZE);
+	SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
 }
 
 UIManager::~UIManager()
@@ -301,6 +301,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	case WM_LBUTTONUP:
 		//Window no longer requires all mouse input
 		ReleaseCapture();
+		instance->WriteWindowPos();
 		break;
 
 	case WM_MOUSEMOVE:
@@ -354,6 +355,16 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		break;
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+void UIManager::WriteWindowPos()
+{
+	RECT rect = { NULL };
+	GetWindowRect(roothWnd, &rect);
+	int x = rect.left;
+	int y = rect.top;
+
+	configManager->UpdateWindowPos(x, y);
 }
 
 INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -429,7 +440,6 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 void UIManager::ForceRepaint()
 {
-	//Force repaint to apply colours
 	RECT rc;
 	GetClientRect(instance->roothWnd, &rc);
 	InvalidateRect(instance->roothWnd, &rc, FALSE);

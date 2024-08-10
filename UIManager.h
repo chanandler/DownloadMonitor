@@ -58,6 +58,7 @@ private:
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	void WriteWindowPos();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
