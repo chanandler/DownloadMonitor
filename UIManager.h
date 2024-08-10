@@ -10,6 +10,7 @@
 #include "iostream";
 #include "thread"
 
+#include "commdlg.h"
 #include "chrono"
 #include "shellapi.h"
 #include <windowsx.h>
@@ -20,11 +21,16 @@
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define ONE_SECOND 1000000
 
+#define EXIT 1
+#define ABOUT 2
+#define SETTINGS 3
+
 class UIManager
 {
 public:
 	static UIManager* instance;
 	static class NetworkManager* netManager;
+	static class ConfigManager* configManager;
 
 	UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow);
 	~UIManager();
@@ -47,13 +53,15 @@ private:
 	NOTIFYICONDATA trayIcon;
 
 	static void UpdateInfo();
-	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-	static INT_PTR About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	void ForceRepaint();
+	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };
 

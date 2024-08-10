@@ -1,14 +1,18 @@
 ﻿#include "UIManager.h"
 #include "NetworkManager.h"
+#include "ConfigManager.h"
+
 
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
+ConfigManager* UIManager::configManager = NULL;
 
 
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
 	instance = this;
 	netManager = new NetworkManager();
+	configManager = new ConfigManager();
 
 	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -23,14 +27,8 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
-	//speedTxt = CreateWindow(L"STATIC", L"SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_CENTER, 10, 10, 200, 20, roothWnd, NULL, hInstance, NULL);
-
-
 	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED",  WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 10, 100, 20, roothWnd, NULL, hInstance, NULL);
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 10, 100, 20, roothWnd, NULL, hInstance, NULL);
-
-	/*dlTxt = CreateWindow(L"TEXT", L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_OWNERDRAW, 0, 0, 200, 20, dlParent, NULL, hInstance, NULL);
-	ulTxt = CreateWindow(L"STATIC", L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | SS_OWNERDRAW, 0, 0, 200, 20, ulParent, NULL, hInstance, NULL);*/
 
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
@@ -46,6 +44,7 @@ UIManager::~UIManager()
 	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
 	running = false;
 	delete netManager;
+	delete configManager;
 }
 
 void UIManager::UpdateInfo()
@@ -187,13 +186,18 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 void UIManager::OnSelectItem(int sel)
 {
-	if (sel == -1)
+	//0 == No selection
+	if (sel == EXIT)
 	{
 		SendMessage(roothWnd, WM_CLOSE, NULL, NULL);
 	}
-	if (sel == 0)
+	if (sel == ABOUT)
 	{
-		DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, About);
+		DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, AboutProc);
+	}
+	if (sel == SETTINGS)
+	{
+		DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_SETTINGS), instance->roothWnd, SettingsProc);
 	}
 }
 
@@ -217,7 +221,7 @@ LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, L
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);				//CHILD WINDOW BACKGROUND COLOUR
-		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(RGB(252, 248, 200)));
+		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(instance->configManager->childColour));
 		SetBkMode(hdc, TRANSPARENT);
 		if (hWnd == instance->dlChildWindow)
 		{
@@ -264,15 +268,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		{
 		case WM_RBUTTONDOWN:
 		{
-			POINT point;
-			GetCursorPos(&point);
-
-			HMENU menu = CreatePopupMenu();
-			AppendMenu(menu, MF_STRING, -1, L"Exit");
-			AppendMenu(menu, MF_STRING, 0, L"About");
-			SetForegroundWindow(instance->roothWnd); //TrackPopupMenu requires the parent window to be in foreground, otherwise the popupmenu won't be destroyed when clicking off it
-			instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
-
+			//Forward onto WM_CONTEXTMENU, as it does the same thing
+			WndProc(hWnd, WM_CONTEXTMENU, wParam, lParam);
 			break;
 		}
 		default:
@@ -288,8 +285,9 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		GetCursorPos(&point);
 
 		HMENU menu = CreatePopupMenu();
-		AppendMenu(menu, MF_STRING, -1, L"Exit");
-		AppendMenu(menu, MF_STRING, 0, L"About");
+		AppendMenu(menu, MF_STRING, EXIT, L"Exit");
+		AppendMenu(menu, MF_STRING, ABOUT, L"About");
+		AppendMenu(menu, MF_STRING, SETTINGS, L"Settings");
 		SetForegroundWindow(instance->roothWnd); //TrackPopupMenu requires the parent window to be in foreground, otherwise the popupmenu won't be destroyed when clicking off it
 		instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
 		break;
@@ -333,7 +331,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		switch (wmId)
 		{
 		case IDM_ABOUT:
-			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, About);
+			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, AboutProc);
 			break;
 		case IDM_EXIT:
 			DestroyWindow(hWnd);
@@ -347,7 +345,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);			//BACKGROUND COLOUR
-		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(RGB(245,242,109)));
+		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(instance->configManager->foregroundColour));
 		EndPaint(hWnd, &ps);
 	}
 	break;
@@ -358,7 +356,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
-INT_PTR CALLBACK UIManager::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
@@ -372,6 +370,78 @@ INT_PTR CALLBACK UIManager::About(HWND hDlg, UINT message, WPARAM wParam, LPARAM
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		else if(LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
+		{
+			bool isPrimary = LOWORD(wParam) == IDC_PRIMARY_COLOUR;
+			COLORREF custColours;
+			CHOOSECOLOR colorStruct = { 0 };
+			colorStruct.hwndOwner = instance->roothWnd;
+			colorStruct.lStructSize = sizeof(CHOOSECOLOR);
+			colorStruct.rgbResult = isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour;
+			colorStruct.lpCustColors = &custColours;
+			colorStruct.Flags = CC_ANYCOLOR | CC_RGBINIT;
+			ChooseColor(&colorStruct);
+
+			int fg_r = GetRValue(colorStruct.rgbResult);
+			int fg_g = GetGValue(colorStruct.rgbResult);
+			int fg_b = GetBValue(colorStruct.rgbResult);
+
+			if(isPrimary)
+			{
+				instance->configManager->UpdateForegroundColour(colorStruct.rgbResult);
+			}
+			else
+			{
+				instance->configManager->UpdateChildColour(colorStruct.rgbResult);
+			}
+
+			//Force repaint to apply colours
+			instance->ForceRepaint();
+		}
+		else if(LOWORD(wParam) == IDC_RESET_COLOURS)
+		{
+			instance->configManager->ResetColours();
+			instance->ForceRepaint();
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+void UIManager::ForceRepaint()
+{
+	//Force repaint to apply colours
+	RECT rc;
+	GetClientRect(instance->roothWnd, &rc);
+	InvalidateRect(instance->roothWnd, &rc, FALSE);
+}
+
+UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch(message)
+	{
+	case WM_DESTROY: //Intercept this message from the colour picker so we know when to apply the selection
+		//Don't need to do it this way
+		//instance->configManager->OnColourPickerComplete();
 		break;
 	}
 	return (INT_PTR)FALSE;
