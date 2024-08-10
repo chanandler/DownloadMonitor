@@ -217,7 +217,7 @@ LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, L
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);				//CHILD WINDOW BACKGROUND COLOUR
-		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(RGB(252, 248, 188)));
+		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(RGB(252, 248, 200)));
 		SetBkMode(hdc, TRANSPARENT);
 		if (hWnd == instance->dlChildWindow)
 		{
