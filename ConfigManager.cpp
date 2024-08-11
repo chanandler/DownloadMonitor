@@ -108,7 +108,11 @@ void ConfigManager::ReadData()
     std::ifstream configFile(pathBuf);
     std::string output;
 
-    bool readData = false;
+    bool readFgCol = false;
+    bool readChCol = false;
+    bool readLastPos = false;
+    bool readOpacity = false;
+
     bool invalidCfg = false;
   
     while(getline(configFile, output))
@@ -126,7 +130,7 @@ void ConfigManager::ReadData()
             }
 
             foregroundColour = val;
-            readData = true;
+            readFgCol = true;
         }
         else if (!strncmp(output.c_str(), CHILD_COLOUR, 12))
         {
@@ -140,7 +144,7 @@ void ConfigManager::ReadData()
                 break;
             }
             childColour = val;
-            readData = true;
+            readChCol = true;
         }
         else if (!strncmp(output.c_str(), LAST_POS, 8))
         {
@@ -155,7 +159,7 @@ void ConfigManager::ReadData()
 
             lastX = std::get<0>(coords);
             lastY = std::get<1>(coords);
-            readData = true;
+            readLastPos = true;
         }
         else if (!strncmp(output.c_str(), OPACITY, 7))
         {
@@ -167,13 +171,13 @@ void ConfigManager::ReadData()
                 break;
             }
             opacity = val;
-            readData = true;
+            readOpacity = true;
         }
     }
 
     configFile.close();
 
-    if(!readData || invalidCfg)
+    if(!readFgCol || !readChCol || !readLastPos || !readOpacity || invalidCfg)
     {
         InitDefaults();
         ReadData();
