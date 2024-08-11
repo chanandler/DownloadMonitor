@@ -183,7 +183,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 void UIManager::UpdateOpacity(HWND hWnd)
 {
-	SetLayeredWindowAttributes(hWnd, RGB(50, 50, 50), configManager->opacity, LWA_COLORKEY | LWA_ALPHA);
+	SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), configManager->opacity, LWA_ALPHA);
 }
 
 void UIManager::OnSelectItem(int sel)
@@ -195,16 +195,16 @@ void UIManager::OnSelectItem(int sel)
 	}
 	if (sel == ABOUT)
 	{
-		DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), instance->roothWnd, AboutProc);
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), roothWnd, AboutProc);
 	}
 	if (sel == SETTINGS)
 	{
-		DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_SETTINGS), instance->roothWnd, SettingsProc);
+		DialogBox(hInst, MAKEINTRESOURCE(IDD_SETTINGS), roothWnd, SettingsProc);
 	}
 }
 
 //For child windows which hold DL/UL texts
-LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
 	{
@@ -223,7 +223,8 @@ LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, L
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);				//CHILD WINDOW BACKGROUND COLOUR
-		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(instance->configManager->childColour));
+		HBRUSH brush = CreateSolidBrush(*instance->configManager->childColour);
+		FillRect(hdc, &ps.rcPaint, brush);
 		SetBkMode(hdc, TRANSPARENT);
 		if (hWnd == instance->dlChildWindow)
 		{
@@ -236,6 +237,7 @@ LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, L
 			DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
 		}
 		EndPaint(hWnd, &ps);
+		DeleteObject(brush);
 		break;
 	}
 	case WM_SETTEXT:
@@ -243,12 +245,15 @@ LRESULT CALLBACK UIManager::ChildProc (HWND hWnd, UINT message, WPARAM wParam, L
 		//Intercept this message and handle it ourselves
 		LPWSTR msg = (LPWSTR)lParam;
 
+
 		if (hWnd == instance->dlChildWindow) 
 		{
+			ZeroMemory(instance->dlBuf, 200);
 			wcscpy(instance->dlBuf, msg);
 		}
 		else if (hWnd == instance->ulChildWindow)
 		{
+			ZeroMemory(instance->ulBuf, 200);
 			wcscpy(instance->ulBuf, msg);
 		}
 		RECT rc;
@@ -347,9 +352,11 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);			//BACKGROUND COLOUR
-		FillRect(hdc, &ps.rcPaint, CreateSolidBrush(instance->configManager->foregroundColour));
+		HDC hdc = BeginPaint(hWnd, &ps);			//OUTER/PRIMARY COLOUR
+		HBRUSH brush = CreateSolidBrush(*instance->configManager->foregroundColour);
+		FillRect(hdc, &ps.rcPaint, brush);
 		EndPaint(hWnd, &ps);
+		DeleteObject(brush);
 	}
 	break;
 	case WM_DESTROY:
@@ -408,8 +415,8 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			CHOOSECOLOR colorStruct = { 0 };
 			colorStruct.hwndOwner = instance->roothWnd;
 			colorStruct.lStructSize = sizeof(CHOOSECOLOR);
-			colorStruct.rgbResult = isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour;
-			colorStruct.lpCustColors = instance->configManager->GetCustomColours();
+			colorStruct.rgbResult = isPrimary ? *instance->configManager->foregroundColour : *instance->configManager->childColour;
+			colorStruct.lpCustColors = instance->configManager->customColBuf;
 			colorStruct.Flags = CC_ANYCOLOR | CC_RGBINIT;
 			ChooseColor(&colorStruct);
 
@@ -491,8 +498,8 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 void UIManager::ForceRepaint()
 {
 	RECT rc;
-	GetClientRect(instance->roothWnd, &rc);
-	InvalidateRect(instance->roothWnd, &rc, FALSE);
+	GetClientRect(roothWnd, &rc);
+	InvalidateRect(roothWnd, &rc, FALSE);
 }
 
 UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)

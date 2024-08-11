@@ -22,23 +22,28 @@ const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248
 
 ConfigManager::ConfigManager()
 {
+    customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
+    foregroundColour = (COLORREF*)malloc(sizeof(COLORREF));
+    childColour = (COLORREF*)malloc(sizeof(COLORREF));
     ReadData();
 }
 
 ConfigManager::~ConfigManager()
 {
     free(customColBuf);
+    free(foregroundColour);
+    free(childColour);
 }
 
 void ConfigManager::UpdateForegroundColour(COLORREF fg_col)
 {
-    foregroundColour = fg_col;
+    *foregroundColour = fg_col;
     WriteData();
 }
 
 void ConfigManager::UpdateChildColour(COLORREF ch_col)
 {
-    childColour = ch_col;
+    *childColour = ch_col;
     WriteData();
 }
 
@@ -65,15 +70,15 @@ void ConfigManager::WriteData()
 {
     //So we don't have to worry about the order/line we write to, we just write every config setting at once
     //(Not very efficient)
-    int fg_r = GetRValue(foregroundColour);
-    int fg_g = GetGValue(foregroundColour);
-    int fg_b = GetBValue(foregroundColour);
+    int fg_r = GetRValue(*foregroundColour);
+    int fg_g = GetGValue(*foregroundColour);
+    int fg_b = GetBValue(*foregroundColour);
 
     IntRGB* fg_RGB = new IntRGB(fg_r, fg_g, fg_b);
 
-    int ch_r = GetRValue(childColour);
-    int ch_g = GetGValue(childColour);
-    int ch_b = GetBValue(childColour);
+    int ch_r = GetRValue(*childColour);
+    int ch_g = GetGValue(*childColour);
+    int ch_b = GetBValue(*childColour);
 
     IntRGB* ch_RGB = new IntRGB(ch_r, ch_g, ch_b);
 
@@ -129,7 +134,7 @@ void ConfigManager::ReadData()
                 break;
             }
 
-            foregroundColour = val;
+            *foregroundColour = val;
             readFgCol = true;
         }
         else if (!strncmp(output.c_str(), CHILD_COLOUR, 12))
@@ -143,7 +148,8 @@ void ConfigManager::ReadData()
                 invalidCfg = true;
                 break;
             }
-            childColour = val;
+
+            *childColour = val;
             readChCol = true;
         }
         else if (!strncmp(output.c_str(), LAST_POS, 8))
@@ -349,14 +355,3 @@ void ConfigManager::CopyRange(char* start, char* end, char* buf, int size)
         written++;
     }
 }
-
-COLORREF* ConfigManager::GetCustomColours()
-{
-    if(!customColBuf)
-    {
-        customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
-    }
-
-    return customColBuf;
-}
-

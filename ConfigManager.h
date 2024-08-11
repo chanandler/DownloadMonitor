@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <tuple>
 
-#define CONFIG_NAME "config.cfg"
+#define CONFIG_NAME "downloadmonitor_config.cfg"
 
 #define FOREGROUND_COLOUR "FOREGROUND_COLOUR"
 #define CHILD_COLOUR "CHILD_COLOUR"
@@ -30,10 +30,7 @@ private:
 	std::tuple<int, int> ProcessCoords(char* dataStart);
 	COLORREF ProcessRGB(char* dataStart);
 	void CopyRange(char* start, char* end, char* buf, int size);
-	COLORREF* customColBuf;
 public:
-
-	COLORREF* GetCustomColours();
 
 	int lastX, lastY;
 	int opacity;
@@ -50,7 +47,8 @@ public:
 
 	void GetFullConfigPath(char* buf);
 
-	COLORREF foregroundColour;
-	COLORREF childColour;
+	COLORREF* foregroundColour;
+	COLORREF* childColour;
+	COLORREF* customColBuf;
 };
 
