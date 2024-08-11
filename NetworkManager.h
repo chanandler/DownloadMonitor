@@ -4,7 +4,7 @@
 #include <ws2ipdef.h>
 #include <iphlpapi.h>
 
-#include "iostream";
+#include "iostream"
 #include "thread"
 
 #include "chrono"

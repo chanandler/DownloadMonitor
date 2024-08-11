@@ -7,7 +7,7 @@
 #include <ws2ipdef.h>
 #include <iphlpapi.h>
 
-#include "iostream";
+#include "iostream"
 #include "thread"
 
 #include "commdlg.h"
@@ -24,6 +24,9 @@
 #define EXIT 1
 #define ABOUT 2
 #define SETTINGS 3
+
+#define MIN_OPACITY 15
+#define MAX_OPACITY 255
 
 class UIManager
 {
@@ -56,12 +59,14 @@ private:
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
+	void UpdateOpacity(HWND hWnd);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	void WriteWindowPos();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	void ForceRepaint();
 	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };

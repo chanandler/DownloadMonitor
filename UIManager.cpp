@@ -2,7 +2,6 @@
 #include "NetworkManager.h"
 #include "ConfigManager.h"
 
-
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
 ConfigManager* UIManager::configManager = NULL;
@@ -27,15 +26,13 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
-	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED",  WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 10, 100, 20, roothWnd, NULL, hInstance, NULL);
-	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 10, 100, 20, roothWnd, NULL, hInstance, NULL);
+	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED",  WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
+	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
 
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
-
-	//Auto move the window to the top right of the screen
-	//Could make this a configurable default?
+	//Move to last known pos
 	SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
 }
 
@@ -154,14 +151,14 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // Store instance handle in our global variable
 
 	HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE, szWindowClass, szTitle, WS_POPUP,
-		CW_USEDEFAULT, 0, 220, 32, nullptr, nullptr, hInstance, nullptr);
+		CW_USEDEFAULT, 0, 220, 28, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
 		return NULL;
 	}
-													//Opacity
-	SetLayeredWindowAttributes(hWnd, RGB(50, 50, 50), 235, LWA_COLORKEY | LWA_ALPHA);
+											
+	UpdateOpacity(hWnd);
 
 	DWORD currentStyle = GetWindowLong(hWnd, GWL_STYLE);
 
@@ -182,6 +179,11 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	Shell_NotifyIcon(NIM_ADD, &trayIcon);
 
 	return hWnd;
+}
+
+void UIManager::UpdateOpacity(HWND hWnd)
+{
+	SetLayeredWindowAttributes(hWnd, RGB(50, 50, 50), configManager->opacity, LWA_COLORKEY | LWA_ALPHA);
 }
 
 void UIManager::OnSelectItem(int sel)
@@ -403,12 +405,11 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		else if(LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
 		{
 			bool isPrimary = LOWORD(wParam) == IDC_PRIMARY_COLOUR;
-			COLORREF custColours;
 			CHOOSECOLOR colorStruct = { 0 };
 			colorStruct.hwndOwner = instance->roothWnd;
 			colorStruct.lStructSize = sizeof(CHOOSECOLOR);
 			colorStruct.rgbResult = isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour;
-			colorStruct.lpCustColors = &custColours;
+			colorStruct.lpCustColors = instance->configManager->GetCustomColours();
 			colorStruct.Flags = CC_ANYCOLOR | CC_RGBINIT;
 			ChooseColor(&colorStruct);
 
@@ -430,8 +431,57 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		}
 		else if(LOWORD(wParam) == IDC_RESET_COLOURS)
 		{
-			instance->configManager->ResetColours();
+			instance->configManager->ResetConfig();
+			instance->UpdateOpacity(instance->roothWnd);
 			instance->ForceRepaint();
+		}
+		else if (LOWORD(wParam) == IDC_OPACITY)
+		{
+			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_OPACITY), hDlg, OpacityProc);
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		HWND editCtrl = GetDlgItem(hDlg, IDC_OPACITY_FIELD);
+		SendMessage(editCtrl, EM_SETLIMITTEXT, (WPARAM)3, NULL);
+		return (INT_PTR)TRUE;
+	}
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK)
+		{
+			HWND editCtrl = GetDlgItem(hDlg, IDC_OPACITY_FIELD);
+			WCHAR buf[100];
+			buf[99] = 0;
+			SendMessage(editCtrl, WM_GETTEXT, 100, (LPARAM)&buf);
+			int newVal = _wtoi(buf);
+
+			if(newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
+			{
+				instance->configManager->UpdateOpacity(newVal);
+				instance->UpdateOpacity(instance->roothWnd);
+				instance->ForceRepaint();
+			}
+			else
+			{
+				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_INVALID_INPUT), hDlg, AboutProc); //Just re-use this proc as it does the same thing
+			}
+
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		if(LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
 		}
 		break;
 	}

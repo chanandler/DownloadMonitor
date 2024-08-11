@@ -7,6 +7,7 @@
 #define FOREGROUND_COLOUR "FOREGROUND_COLOUR"
 #define CHILD_COLOUR "CHILD_COLOUR"
 #define LAST_POS "LAST_POS"
+#define OPACITY "OPACITY"
 
 class ConfigManager
 {
@@ -25,13 +26,18 @@ private:
 	void InitDefaults();
 	void WriteData();
 	void ReadData();
+	int ProcessInt(char* dataStart);
 	std::tuple<int, int> ProcessCoords(char* dataStart);
 	COLORREF ProcessRGB(char* dataStart);
 	void CopyRange(char* start, char* end, char* buf, int size);
+	COLORREF* customColBuf;
 public:
 
+	COLORREF* GetCustomColours();
+
 	int lastX, lastY;
-	void ResetColours();
+	int opacity;
+	void ResetConfig();
 
 	ConfigManager();
 	~ConfigManager();
@@ -39,6 +45,10 @@ public:
 	void UpdateChildColour(COLORREF ch_col);
 
 	void UpdateWindowPos(int x, int y);
+
+	void UpdateOpacity(int newopacity);
+
+	void GetFullConfigPath(char* buf);
 
 	COLORREF foregroundColour;
 	COLORREF childColour;

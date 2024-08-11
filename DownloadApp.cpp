@@ -25,8 +25,6 @@
 
 
 //TODO:
-//Save last window pos
-//Have persistent config for things such as download units, window colour (Done), etc.
 //Add some kind of license key systsm to copy DU meter
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)

@@ -18,7 +18,7 @@ public:
     }
 };
 
-const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0";
+const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\n";
 
 ConfigManager::ConfigManager()
 {
@@ -27,7 +27,7 @@ ConfigManager::ConfigManager()
 
 ConfigManager::~ConfigManager()
 {
-
+    free(customColBuf);
 }
 
 void ConfigManager::UpdateForegroundColour(COLORREF fg_col)
@@ -49,8 +49,22 @@ void ConfigManager::UpdateWindowPos(int x, int y)
     WriteData();
 }
 
+void ConfigManager::UpdateOpacity(int newopacity)
+{
+    opacity = newopacity;
+    WriteData();
+}
+
+void ConfigManager::GetFullConfigPath(char* buf)
+{
+    char* appdata = getenv("APPDATA");
+    sprintf_s(buf, MAX_PATH, "%s\\%s", appdata, CONFIG_NAME);
+}
+
 void ConfigManager::WriteData()
 {
+    //So we don't have to worry about the order/line we write to, we just write every config setting at once
+    //(Not very efficient)
     int fg_r = GetRValue(foregroundColour);
     int fg_g = GetGValue(foregroundColour);
     int fg_b = GetBValue(foregroundColour);
@@ -72,12 +86,16 @@ void ConfigManager::WriteData()
     char lp_Buf[200];
     sprintf_s(lp_Buf, "%s=%i,%i", LAST_POS, lastX, lastY);
 
-    std::ofstream configFile(CONFIG_NAME);
+    char op_Buf[200];
+    sprintf_s(op_Buf, "%s=%i", OPACITY, opacity);
+
+    char pathBuf[MAX_PATH];
+    GetFullConfigPath(pathBuf);
+    std::ofstream configFile(pathBuf);
 
     // Write to the file
-    configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n";
+    configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n";
 
-    // Close the file
     configFile.close();
 
     delete fg_RGB, ch_RGB;
@@ -85,42 +103,97 @@ void ConfigManager::WriteData()
 
 void ConfigManager::ReadData()
 {
-    std::ifstream configFile(CONFIG_NAME);
+    char pathBuf[MAX_PATH];
+    GetFullConfigPath(pathBuf);
+    std::ifstream configFile(pathBuf);
     std::string output;
 
     bool readData = false;
+    bool invalidCfg = false;
   
     while(getline(configFile, output))
     {
         if(!strncmp(output.c_str(),FOREGROUND_COLOUR, 14))
         {
             char* dataStart = strchr((char*)output.c_str(), '=');
-            foregroundColour = ProcessRGB(dataStart);
+            COLORREF val = ProcessRGB(dataStart);
+            int r = GetRValue(val);
+
+            if(r == -1)
+            {
+                invalidCfg = true;
+                break;
+            }
+
+            foregroundColour = val;
             readData = true;
         }
         else if (!strncmp(output.c_str(), CHILD_COLOUR, 12))
         {
             char* dataStart = strchr((char*)output.c_str(), '=');
-            childColour = ProcessRGB(dataStart);
+            COLORREF val = ProcessRGB(dataStart);
+            int r = GetRValue(val);
+
+            if (r == -1)
+            {
+                invalidCfg = true;
+                break;
+            }
+            childColour = val;
             readData = true;
         }
         else if (!strncmp(output.c_str(), LAST_POS, 8))
         {
             char* dataStart = strchr((char*)output.c_str(), '=');
             std::tuple<int,int> coords = ProcessCoords(dataStart);
+
+            if(std::get<0>(coords) == -1)
+            {
+                invalidCfg = true;
+                break;
+            }
+
             lastX = std::get<0>(coords);
             lastY = std::get<1>(coords);
+            readData = true;
+        }
+        else if (!strncmp(output.c_str(), OPACITY, 7))
+        {
+            char* dataStart = strchr((char*)output.c_str(), '=');
+            int val = ProcessInt(dataStart);
+            if(val == -1)
+            {
+                invalidCfg = true;
+                break;
+            }
+            opacity = val;
             readData = true;
         }
     }
 
     configFile.close();
 
-    if(!readData)
+    if(!readData || invalidCfg)
     {
         InitDefaults();
         ReadData();
     }
+}
+
+int ConfigManager::ProcessInt(char* dataStart)
+{
+    ++dataStart;
+    char* dataEnd = &dataStart[strlen(dataStart)];
+
+    if(!dataEnd)
+    {
+        return -1;
+    }
+
+    char buf[20];
+    CopyRange(dataStart, dataEnd, buf, 20);
+
+    return atoi(buf);
 }
 
 std::tuple<int, int> ConfigManager::ProcessCoords(char* dataStart)
@@ -128,6 +201,10 @@ std::tuple<int, int> ConfigManager::ProcessCoords(char* dataStart)
     ++dataStart;
     char* prevGood = dataStart;
     char* nxt = strchr(dataStart, ',');
+    if(!nxt)
+    {
+        return std::make_tuple(-1, -1);
+    }
     int colIndex = 0;
 
     char xBuf[100];
@@ -178,7 +255,7 @@ COLORREF ConfigManager::ProcessRGB(char* dataStart)
 {
     if (!dataStart)
     {
-        return RGB(0,0,0);
+        return RGB(-1,-1,-1);
     }
     ++dataStart;
     char* prevGood = dataStart;
@@ -238,7 +315,7 @@ COLORREF ConfigManager::ProcessRGB(char* dataStart)
     return RGB(r, g, b);
 }
 
-void ConfigManager::ResetColours()
+void ConfigManager::ResetConfig()
 {
     InitDefaults();
     ReadData();
@@ -246,7 +323,10 @@ void ConfigManager::ResetColours()
 
 void ConfigManager::InitDefaults()
 {
-    std::ofstream newConfigFile(CONFIG_NAME);
+    char pathBuf[MAX_PATH];
+    GetFullConfigPath(pathBuf);
+
+    std::ofstream newConfigFile(pathBuf);
 
     newConfigFile << defaultConfig;
 
@@ -264,5 +344,15 @@ void ConfigManager::CopyRange(char* start, char* end, char* buf, int size)
 
         written++;
     }
+}
+
+COLORREF* ConfigManager::GetCustomColours()
+{
+    if(!customColBuf)
+    {
+        customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
+    }
+
+    return customColBuf;
 }
 

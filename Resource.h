@@ -12,12 +12,17 @@
 #define IDD_SETTINGS                    104
 #define IDM_EXIT                        105
 #define IDC_PRIMARY_COLOUR              105
+#define IDD_OPACITY                     105
 #define IDC_SECONDARY_COLOUR            106
+#define IDD_OPACITY1                    106
+#define IDD_INVALID_INPUT               106
 #define IDI_NAME                        107
 #define IDC_RESET_COLOURS               107
 #define IDI_SMALL                       108
+#define IDC_OPACITY_FIELD               108
 #define IDC_NAME                        109
 #define IDC_DOWNLOAD_APP                109
+#define IDC_OPACITY                     110
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       133
 #define IDI_LOGO                        133
@@ -31,7 +36,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        134
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1001
+#define _APS_NEXT_CONTROL_VALUE         1004
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
