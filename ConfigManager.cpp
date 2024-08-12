@@ -20,11 +20,12 @@ public:
 
 const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\n";
 
-ConfigManager::ConfigManager()
+ConfigManager::ConfigManager(char* configDirOverride)
 {
     customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
     foregroundColour = (COLORREF*)malloc(sizeof(COLORREF));
     childColour = (COLORREF*)malloc(sizeof(COLORREF));
+    configDir = configDirOverride;
     ReadData();
 }
 
@@ -62,8 +63,9 @@ void ConfigManager::UpdateOpacity(int newopacity)
 
 void ConfigManager::GetFullConfigPath(char* buf)
 {
+    //Either pass in override dir or use appdata
     char* appdata = getenv("APPDATA");
-    sprintf_s(buf, MAX_PATH, "%s\\%s", appdata, CONFIG_NAME);
+    sprintf_s(buf, MAX_PATH, "%s\\%s", configDir ? configDir : appdata, CONFIG_NAME);
 }
 
 void ConfigManager::WriteData()
@@ -183,8 +185,17 @@ void ConfigManager::ReadData()
 
     configFile.close();
 
+    if (retriedOnce)
+    {
+        //We've tried to read and write to a cfg file, but we've still failed.
+        //Passed in path is most likely not valid
+        failedToInit = true;
+        return;
+    }
+
     if(!readFgCol || !readChCol || !readLastPos || !readOpacity || invalidCfg)
     {
+        retriedOnce = true;
         InitDefaults();
         ReadData();
     }

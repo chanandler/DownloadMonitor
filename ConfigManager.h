@@ -30,13 +30,17 @@ private:
 	std::tuple<int, int> ProcessCoords(char* dataStart);
 	COLORREF ProcessRGB(char* dataStart);
 	void CopyRange(char* start, char* end, char* buf, int size);
+	char* configDir = nullptr;
+	bool retriedOnce = false;
+
 public:
+	bool failedToInit = false;
 
 	int lastX, lastY;
 	int opacity;
 	void ResetConfig();
 
-	ConfigManager();
+	ConfigManager(char* configDirOverride);
 	~ConfigManager();
 	void UpdateForegroundColour(COLORREF fg_col);
 	void UpdateChildColour(COLORREF ch_col);

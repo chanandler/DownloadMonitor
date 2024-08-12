@@ -11,7 +11,28 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 {
 	instance = this;
 	netManager = new NetworkManager();
-	configManager = new ConfigManager();
+
+	//Convert args to ansi as ConfigManager uses ansi for everything else...
+	
+	//First get required buffer size
+	int reqBufSize = WideCharToMultiByte(CP_UTF8, 0, lpCmdLine, -1, NULL, 0, NULL, NULL);
+	
+	//Alocate
+	ansiArgs = (char*)malloc(reqBufSize);
+	char* dirStart = nullptr;
+	if(ansiArgs)
+	{
+		//Actually perform the conversion
+		WideCharToMultiByte(CP_UTF8, 0, lpCmdLine, _tcslen(lpCmdLine), &ansiArgs[0], reqBufSize, NULL, NULL);
+		ansiArgs[reqBufSize - 1] = 0;
+
+		if (!strncmp(ansiArgs, "-configdir=", 11)) //If we passed in an argument
+		{
+			dirStart = &ansiArgs[11]; //Get the path
+		}
+	}
+	
+	configManager = new ConfigManager(dirStart); //Passing in potential nullptr is safe as configmanager expects one
 
 	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -23,6 +44,14 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	// Perform application initialization:
 	if (roothWnd == NULL)
 	{
+		MessageBox(NULL, L"Failed to create window, shutting down!", L"NetworkManager", MB_OK);
+		return;
+	}
+
+	if (configManager->failedToInit) //A bit lazy but if we don't have a valid config path, kill the program
+	{
+		MessageBox(NULL, L"Failed to initialise config, is the supplied path valid?", L"NetworkManager", MB_OK);
+		SendMessage(roothWnd, WM_CLOSE, NULL, NULL);
 		return;
 	}
 
@@ -38,6 +67,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 
 UIManager::~UIManager()
 {
+	free(ansiArgs);
 	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
 	running = false;
 	delete netManager;
@@ -90,7 +120,7 @@ void UIManager::UpdateInfo()
 		}
 
 		swprintf_s(dlBuf, L"↓ %.1lf %s", dl, dlKbps ? L"kbps" : L"Mbps");
-		swprintf_s(ulBuf, L"↑ %.1lf %s",ul, ulKbps ? L"kbps" : L"Mbps");
+		swprintf_s(ulBuf, L"↑ %.1lf %s", ul, ulKbps ? L"kbps" : L"Mbps");
 
 		SetWindowText(instance->dlChildWindow, dlBuf);
 		SetWindowText(instance->ulChildWindow, ulBuf);
