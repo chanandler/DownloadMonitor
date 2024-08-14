@@ -1,6 +1,7 @@
 ﻿#include "UIManager.h"
 #include "NetworkManager.h"
 #include "ConfigManager.h"
+#include "Commctrl.h"
 
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
@@ -488,18 +489,16 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 	{
 	case WM_INITDIALOG:
 	{
-		HWND editCtrl = GetDlgItem(hDlg, IDC_OPACITY_FIELD);
-		SendMessage(editCtrl, EM_SETLIMITTEXT, (WPARAM)3, NULL);
+		HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
+		SendMessage(sliderCtrl, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELPARAM(MIN_OPACITY, MAX_OPACITY));
+		SendMessage(sliderCtrl, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)instance->configManager->opacity);
 		return (INT_PTR)TRUE;
 	}
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK)
 		{
-			HWND editCtrl = GetDlgItem(hDlg, IDC_OPACITY_FIELD);
-			WCHAR buf[100];
-			buf[99] = 0;
-			SendMessage(editCtrl, WM_GETTEXT, 100, (LPARAM)&buf);
-			int newVal = _wtoi(buf);
+			HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
+			int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
 
 			if(newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
 			{

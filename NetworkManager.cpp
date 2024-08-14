@@ -2,7 +2,7 @@
 
 NetworkManager::NetworkManager()
 {
-	
+
 }
 
 NetworkManager::~NetworkManager()
@@ -15,39 +15,43 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 {
 	double dl = -1.0;
 	double ul = -1.0;
-
+	int adapterIndex = -1;
 	if (GetIfTable2(interfaces) == NO_ERROR)
 	{
 		MIB_IF_ROW2* row;
 
-		if (cacheIndex == -1)
+		for (int i = 0; i < interfaces[0]->NumEntries; i++)
 		{
-			for (int i = 0; i < interfaces[0]->NumEntries; i++)
+			row = &interfaces[0]->Table[i];
+			if (row)
 			{
-				row = &interfaces[0]->Table[i];
-				if (row)
+				//Find any interface that has incoming data, is marked as connected and not set as Unspecified medium type
+				if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected || row->PhysicalMediumType == NdisPhysicalMediumUnspecified)
 				{
-					//Find wireless interface
-					//if (row->Type != IF_TYPE_IEEE80211)
-					if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected /*|| row->Type != MIB_IF_TYPE_ETHERNET*/)
-					{
-						continue;
-					}
-
-					cacheIndex = i; //Save the index so we can grab it immediately each time 
-					break;
+					continue;
 				}
+
+				adapterIndex = i;
+				break;
 			}
 		}
 
-		if (cacheIndex != -1)
+		if (adapterIndex != -1)
 		{
-			row = &interfaces[0]->Table[cacheIndex];
+			row = &interfaces[0]->Table[adapterIndex];
+
+			bool newAdapter = false;
+			if(memcmp(row->PermanentPhysicalAddress, currentPhysicalAddress, IF_MAX_PHYS_ADDRESS_LENGTH))
+			{
+				newAdapter = true;
+				memcpy(currentPhysicalAddress, row->PermanentPhysicalAddress, IF_MAX_PHYS_ADDRESS_LENGTH);
+			}
+
 			if (row)
 			{
 				//Convert to bits
 				double dlBits = (row->InOctets * 8.0);
-				if (lastDlCount == -1.0) //Fix massive delta when first running program and lastDl/UlCount is not set
+				if (newAdapter) //Fix massive delta when first running program/switching adapters
 				{
 					lastDlCount = dlBits;
 				}
@@ -57,7 +61,7 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 
 				double ulBits = (row->OutOctets * 8.0);
 
-				if (lastUlCount == -1.0)
+				if (newAdapter)
 				{
 					lastUlCount = ulBits;
 				}
@@ -65,6 +69,12 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 				ul = ulBits - lastUlCount;
 				lastUlCount = ulBits;
 			}
+		}
+		else
+		{
+			//No adapters available, just return 0
+			dl = 0;
+			ul = 0;
 		}
 	}
 

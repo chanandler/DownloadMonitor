@@ -23,6 +23,8 @@ public:
 private:
 	double lastDlCount = -1.0;
 	double lastUlCount = -1.0;
-	int cacheIndex = -1;
+
+	UCHAR currentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
+	//int cacheIndex = -1;
 };
 
