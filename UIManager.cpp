@@ -257,6 +257,8 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		HBRUSH brush = CreateSolidBrush(*instance->configManager->childColour);
 		FillRect(hdc, &ps.rcPaint, brush);
 		SetBkMode(hdc, TRANSPARENT);
+		HFONT txtFont =CreateFontIndirect(instance->configManager->currentFont);
+		SelectObject(hdc, txtFont);
 		if (hWnd == instance->dlChildWindow)
 		{
 			SetTextColor(hdc, RGB(200, 10, 10));
@@ -269,6 +271,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		EndPaint(hWnd, &ps);
 		DeleteObject(brush);
+		DeleteObject(txtFont);
 		break;
 	}
 	case WM_SETTEXT:
@@ -439,6 +442,26 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		{
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
+		}
+		else if (LOWORD(wParam) == IDC_FONT)
+		{
+			CHOOSEFONT fontStruct = { 0 };
+			fontStruct.lStructSize = sizeof(CHOOSEFONT);
+			fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE;
+			fontStruct.nSizeMin = 4;
+			fontStruct.nSizeMax = 12;
+			fontStruct.hwndOwner = hDlg;
+			fontStruct.lpLogFont = instance->configManager->currentFont;
+
+			if(ChooseFont(&fontStruct))
+			{
+				instance->configManager->UpdateFont(*fontStruct.lpLogFont);
+				/*HFONT hf = CreateFontIndirect(&lf);
+				if(hf)
+				{
+					
+				}*/
+			}
 		}
 		else if(LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
 		{

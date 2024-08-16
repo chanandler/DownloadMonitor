@@ -8,6 +8,25 @@
 #define CHILD_COLOUR "CHILD_COLOUR"
 #define LAST_POS "LAST_POS"
 #define OPACITY "OPACITY"
+#define FONT "FONT"
+
+enum FONT_ENUM
+{
+	HEIGHT = 0,
+	WIDTH,
+	ESCAPEMENT,
+	ORIENTATION,
+	WEIGHT,
+	ITALIC,
+	UNDERLINE,
+	STRIKE_OUT,
+	CHAR_SET,
+	OUT_PRECISION,
+	CLIP_PRECISION,
+	QUALITY,
+	PITCH_AND_FAMILY,
+	FACE_NAME
+};
 
 class ConfigManager
 {
@@ -25,8 +44,10 @@ class ConfigManager
 private:
 	void InitDefaults();
 	void WriteData();
+	char* WideToAnsi(LPWSTR inStr);
 	void ReadData();
 	int ProcessInt(char* dataStart);
+	LOGFONT ProcessFont(char* dataStart);
 	std::tuple<int, int> ProcessCoords(char* dataStart);
 	COLORREF ProcessRGB(char* dataStart);
 	void CopyRange(char* start, char* end, char* buf, int size);
@@ -47,6 +68,8 @@ public:
 
 	void UpdateWindowPos(int x, int y);
 
+	void UpdateFont(LOGFONT f);
+
 	void UpdateOpacity(int newopacity);
 
 	void GetFullConfigPath(char* buf);
@@ -54,5 +77,7 @@ public:
 	COLORREF* foregroundColour;
 	COLORREF* childColour;
 	COLORREF* customColBuf;
+
+	LOGFONT* currentFont;
 };
 

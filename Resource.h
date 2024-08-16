@@ -24,6 +24,8 @@
 #define IDC_NAME                        109
 #define IDC_DOWNLOAD_APP                109
 #define IDC_OPACITY                     110
+#define IDC_OPACITY2                    111
+#define IDC_FONT                        111
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       133
 #define IDI_LOGO                        133

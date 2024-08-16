@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream> 
 #include <string>
+#include <tchar.h>
 
 class IntRGB
 {
@@ -18,7 +19,7 @@ public:
     }
 };
 
-const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\n";
+const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\n";
 
 ConfigManager::ConfigManager(char* configDirOverride)
 {
@@ -52,6 +53,18 @@ void ConfigManager::UpdateWindowPos(int x, int y)
 {
     lastX = x;
     lastY = y;
+    WriteData();
+}
+
+void ConfigManager::UpdateFont(LOGFONT f)
+{
+    if(currentFont)
+    {
+        free(currentFont);
+    }
+
+    currentFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+    memcpy(currentFont, &f, sizeof(LOGFONT));
     WriteData();
 }
 
@@ -96,16 +109,43 @@ void ConfigManager::WriteData()
     char op_Buf[200];
     sprintf_s(op_Buf, "%s=%i", OPACITY, opacity);
 
+    char fo_Buf[500];
+
+    char* fontName = WideToAnsi(currentFont->lfFaceName);
+    if(fontName)
+    {
+        sprintf_s(fo_Buf, "%s=%i,%i,%i,%i,%i,%u,%u,%u,%u,%u,%u,%u,%u,%s", FONT, currentFont->lfHeight, currentFont->lfWidth, currentFont->lfEscapement,
+            currentFont->lfOrientation, currentFont->lfWeight, currentFont->lfItalic, currentFont->lfUnderline, currentFont->lfStrikeOut, currentFont->lfCharSet,
+            currentFont->lfOutPrecision, currentFont->lfClipPrecision, currentFont->lfQuality, currentFont->lfPitchAndFamily, fontName);
+    }
+
     char pathBuf[MAX_PATH];
     GetFullConfigPath(pathBuf);
     std::ofstream configFile(pathBuf);
 
     // Write to the file
-    configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n";
+    configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n";
 
     configFile.close();
 
     delete fg_RGB, ch_RGB;
+}
+
+char* ConfigManager::WideToAnsi(LPWSTR inStr)
+{
+    //First get required buffer size
+    int reqBufSize = WideCharToMultiByte(CP_UTF8, 0, inStr, -1, NULL, 0, NULL, NULL);
+
+    //Alocate
+    char* ret = (char*)malloc(reqBufSize);
+    if (ret)
+    {
+        //Actually perform the conversion
+        WideCharToMultiByte(CP_UTF8, 0, inStr, _tcslen(inStr), &ret[0], reqBufSize, NULL, NULL);
+        ret[reqBufSize - 1] = 0;
+    }
+
+    return ret;
 }
 
 void ConfigManager::ReadData()
@@ -119,14 +159,16 @@ void ConfigManager::ReadData()
     bool readChCol = false;
     bool readLastPos = false;
     bool readOpacity = false;
+    bool readFont = false;
 
     bool invalidCfg = false;
   
     while(getline(configFile, output))
     {
+        char* dataStart = strchr((char*)output.c_str(), '=');
+
         if(!strncmp(output.c_str(),FOREGROUND_COLOUR, 14))
         {
-            char* dataStart = strchr((char*)output.c_str(), '=');
             COLORREF val = ProcessRGB(dataStart);
             int r = GetRValue(val);
 
@@ -141,7 +183,6 @@ void ConfigManager::ReadData()
         }
         else if (!strncmp(output.c_str(), CHILD_COLOUR, 12))
         {
-            char* dataStart = strchr((char*)output.c_str(), '=');
             COLORREF val = ProcessRGB(dataStart);
             int r = GetRValue(val);
 
@@ -156,7 +197,6 @@ void ConfigManager::ReadData()
         }
         else if (!strncmp(output.c_str(), LAST_POS, 8))
         {
-            char* dataStart = strchr((char*)output.c_str(), '=');
             std::tuple<int,int> coords = ProcessCoords(dataStart);
 
             if(std::get<0>(coords) == -1)
@@ -171,7 +211,6 @@ void ConfigManager::ReadData()
         }
         else if (!strncmp(output.c_str(), OPACITY, 7))
         {
-            char* dataStart = strchr((char*)output.c_str(), '=');
             int val = ProcessInt(dataStart);
             if(val == -1)
             {
@@ -181,20 +220,32 @@ void ConfigManager::ReadData()
             opacity = val;
             readOpacity = true;
         }
+        else if (!strncmp(output.c_str(), FONT, 4))
+        {
+            LOGFONT font = ProcessFont(dataStart);
+            currentFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+            if(currentFont)
+            {
+                memcpy(currentFont, &font, sizeof(LOGFONT));
+            }
+
+            readFont = true;
+        }
     }
 
     configFile.close();
 
-    if (retriedOnce)
+ 
+    if(!readFgCol || !readChCol || !readLastPos || !readOpacity || !readFont || invalidCfg)
     {
-        //We've tried to read and write to a cfg file, but we've still failed.
-        //Passed in path is most likely not valid
-        failedToInit = true;
-        return;
-    }
+        if (retriedOnce)
+        {
+            //We've tried to read and write to a cfg file, but we've still failed.
+            //Passed in path is most likely not valid
+            failedToInit = true;
+            return;
+        }
 
-    if(!readFgCol || !readChCol || !readLastPos || !readOpacity || invalidCfg)
-    {
         retriedOnce = true;
         InitDefaults();
         ReadData();
@@ -215,6 +266,118 @@ int ConfigManager::ProcessInt(char* dataStart)
     CopyRange(dataStart, dataEnd, buf, 20);
 
     return atoi(buf);
+}
+
+LOGFONT ConfigManager::ProcessFont(char* dataStart)
+{
+    ++dataStart;
+
+    char* prevGood = dataStart;
+    char* nxt = strchr(dataStart, ',');
+
+    int pos = 0;
+    LOGFONT ret = { 0 };
+
+    if(!nxt)
+    {
+        return ret;
+    }
+
+    bool atEnd = false;
+
+    while(nxt)
+    {
+        char buf[200];
+        CopyRange(prevGood, nxt, buf, 200);
+
+
+        switch((FONT_ENUM)pos)
+        {
+            case HEIGHT:
+            {
+                ret.lfHeight = atoi(buf);
+                break;
+            }
+            case WIDTH:
+            {
+                ret.lfWidth = atoi(buf);
+                break;
+            }
+            case ESCAPEMENT:
+            {
+                ret.lfEscapement = atoi(buf);
+                break;
+            }
+            case ORIENTATION:
+            {
+                ret.lfOrientation = atoi(buf);
+                break;
+            }
+            case WEIGHT:
+            {
+                ret.lfWeight = atoi(buf);
+                break;
+            }
+            case ITALIC:
+            {
+                ret.lfItalic = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case UNDERLINE:
+            {
+                ret.lfUnderline = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case STRIKE_OUT:
+            {
+                ret.lfStrikeOut = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case CHAR_SET:
+            {
+                ret.lfCharSet = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case OUT_PRECISION:
+            {
+                ret.lfOutPrecision = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case CLIP_PRECISION:
+            {
+                ret.lfClipPrecision = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case QUALITY:
+            {
+                ret.lfQuality = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case PITCH_AND_FAMILY:
+            {
+                ret.lfPitchAndFamily = strtoul(buf, nullptr, 10);
+                break;
+            }
+            case FACE_NAME:
+            {
+                swprintf(ret.lfFaceName, LF_FACESIZE, L"%hs", buf);
+                break;
+            }
+        }
+
+        nxt++;
+        prevGood = nxt;
+        nxt = strchr(nxt, ',');
+        if (!nxt && !atEnd)
+        {
+            atEnd = true;
+            nxt = &dataStart[strlen(dataStart)];
+        }
+
+        pos++;
+    }
+
+    return ret;
 }
 
 std::tuple<int, int> ConfigManager::ProcessCoords(char* dataStart)
