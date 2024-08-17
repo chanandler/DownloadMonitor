@@ -4,6 +4,8 @@
 
 #define CONFIG_NAME "downloadmonitor_config.cfg"
 
+#define PARAM_COUNT 5
+
 #define FOREGROUND_COLOUR "FOREGROUND_COLOUR"
 #define CHILD_COLOUR "CHILD_COLOUR"
 #define LAST_POS "LAST_POS"
@@ -45,7 +47,6 @@ private:
 	void InitDefaults();
 	void WriteData();
 	char* WideToAnsi(LPWSTR inStr);
-	void ReadData();
 	int ProcessInt(char* dataStart);
 	LOGFONT ProcessFont(char* dataStart);
 	std::tuple<int, int> ProcessCoords(char* dataStart);
@@ -55,13 +56,12 @@ private:
 	bool retriedOnce = false;
 
 public:
-	bool failedToInit = false;
-
 	int lastX, lastY;
 	int opacity;
 	void ResetConfig();
+	bool ReadData();
 
-	ConfigManager(char* configDirOverride);
+	ConfigManager(LPWSTR configDirOverride);
 	~ConfigManager();
 	void UpdateForegroundColour(COLORREF fg_col);
 	void UpdateChildColour(COLORREF ch_col);
