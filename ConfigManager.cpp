@@ -150,6 +150,7 @@ void ConfigManager::WriteData()
 	delete fg_RGB, ch_RGB;
 }
 
+//PURPOSE: Convert from Unicode(Wide), used by UIManager to Ansi
 char* ConfigManager::WideToAnsi(LPWSTR inStr)
 {
 	//First get required buffer size
@@ -167,6 +168,7 @@ char* ConfigManager::WideToAnsi(LPWSTR inStr)
 	return ret;
 }
 
+//PURPOSE: Read through all entries in config file and write to relevant variables, which are read by UIManager
 bool ConfigManager::ReadData()
 {
 	char pathBuf[MAX_PATH];
@@ -271,6 +273,7 @@ bool ConfigManager::ReadData()
 	return true;
 }
 
+//PURPOSE: Read int value from config file
 int ConfigManager::ProcessInt(char* dataStart)
 {
 	++dataStart;
@@ -287,6 +290,7 @@ int ConfigManager::ProcessInt(char* dataStart)
 	return atoi(buf);
 }
 
+//PURPOSE: Read comma seperated font parameters and construct into LOGFONT
 LOGFONT ConfigManager::ProcessFont(char* dataStart)
 {
 	++dataStart;
@@ -304,6 +308,7 @@ LOGFONT ConfigManager::ProcessFont(char* dataStart)
 
 	bool atEnd = false;
 
+	//Fonts have so many parameters, so step through one by one with a state-based approach
 	while (nxt)
 	{
 		char buf[200];
@@ -399,6 +404,7 @@ LOGFONT ConfigManager::ProcessFont(char* dataStart)
 	return ret;
 }
 
+//PURPOSE: Read comma seperated coordinate value and return tuple of ints
 std::tuple<int, int> ConfigManager::ProcessCoords(char* dataStart)
 {
 	++dataStart;

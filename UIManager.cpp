@@ -435,11 +435,6 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			if(ChooseFont(&fontStruct))
 			{
 				instance->configManager->UpdateFont(*fontStruct.lpLogFont);
-				/*HFONT hf = CreateFontIndirect(&lf);
-				if(hf)
-				{
-					
-				}*/
 			}
 		}
 		else if(LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
