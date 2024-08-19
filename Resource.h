@@ -3,6 +3,7 @@
 // Used by Name.rc
 //
 #define IDC_MYICON                      2
+#define IDOK2                           2
 #define IDD_NAME_DIALOG                 102
 #define IDS_APP_TITLE                   103
 #define IDD_ABOUTBOX                    103
@@ -16,19 +17,27 @@
 #define IDC_SECONDARY_COLOUR            106
 #define IDD_OPACITY1                    106
 #define IDD_INVALID_INPUT               106
+#define IDD_FONT_WARNING                106
 #define IDI_NAME                        107
 #define IDC_RESET_COLOURS               107
+#define IDD_TEXT                        107
 #define IDI_SMALL                       108
 #define IDC_OPACITY_FIELD               108
 #define IDC_OPACITY_SLIDER              108
 #define IDC_NAME                        109
 #define IDC_DOWNLOAD_APP                109
 #define IDC_OPACITY                     110
-#define IDC_OPACITY2                    111
 #define IDC_FONT                        111
+#define IDC_DOWNLOAD_COL                112
+#define IDC_TEXT                        112
+#define IDC_UPLOAD_COL                  113
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       133
 #define IDI_LOGO                        133
+#define IDI_ICON2                       134
+#define IDB_BITMAP1                     136
+#define IDB_UP_ARROW                    136
+#define IDB_DOWN_ARROW                  140
 #define IDC_BUTTON1                     1000
 #define IDC_STATIC                      -1
 
@@ -37,7 +46,7 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        134
+#define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
 #define _APS_NEXT_CONTROL_VALUE         1005
 #define _APS_NEXT_SYMED_VALUE           110

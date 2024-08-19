@@ -72,5 +72,32 @@
     <Image Include="Logo.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="upArrow.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="bitmap1.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="bitmap2.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="up_arrow.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="up_arrow_test.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="bitmap3.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="upArrowMask.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="upArrowBase.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="downArrowBase.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>

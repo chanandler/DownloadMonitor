@@ -19,13 +19,15 @@ public:
 	}
 };
 
-const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\n";
+const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\nUPLOAD_TXT_COLOUR=0,215,54\nDOWNLOAD_TXT_COLOUR = 255, 0, 0";
 
 ConfigManager::ConfigManager(LPWSTR configDirOverride)
 {
 	customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
 	foregroundColour = (COLORREF*)malloc(sizeof(COLORREF));
 	childColour = (COLORREF*)malloc(sizeof(COLORREF));
+	uploadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
+	downloadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
 
 	if (configDirOverride)
 	{
@@ -47,6 +49,8 @@ ConfigManager::~ConfigManager()
 	free(foregroundColour);
 	free(childColour);
 	free(currentFont);
+	free(uploadTxtColour);
+	free(downloadTxtColour);
 	if (configDir)
 	{
 		free(configDir);
@@ -62,6 +66,18 @@ void ConfigManager::UpdateForegroundColour(COLORREF fg_col)
 void ConfigManager::UpdateChildColour(COLORREF ch_col)
 {
 	*childColour = ch_col;
+	WriteData();
+}
+
+void ConfigManager::UpdateUploadTextColour(COLORREF fg_col)
+{
+	*uploadTxtColour = fg_col;
+	WriteData();
+}
+
+void ConfigManager::UpdateDownloadTextColour(COLORREF ch_col)
+{
+	*downloadTxtColour = ch_col;
 	WriteData();
 }
 
@@ -104,23 +120,13 @@ void ConfigManager::WriteData()
 {
 	//So we don't have to worry about the order/line we write to, we just write every config setting at once
 	//(Not very efficient)
-	int fg_r = GetRValue(*foregroundColour);
-	int fg_g = GetGValue(*foregroundColour);
-	int fg_b = GetBValue(*foregroundColour);
-
-	IntRGB* fg_RGB = new IntRGB(fg_r, fg_g, fg_b);
-
-	int ch_r = GetRValue(*childColour);
-	int ch_g = GetGValue(*childColour);
-	int ch_b = GetBValue(*childColour);
-
-	IntRGB* ch_RGB = new IntRGB(ch_r, ch_g, ch_b);
 
 	char fg_Buf[200];
-	sprintf_s(fg_Buf, "%s=%i,%i,%i", FOREGROUND_COLOUR, fg_RGB->r, fg_RGB->g, fg_RGB->b);
+	sprintf_s(fg_Buf, "%s=%i,%i,%i", FOREGROUND_COLOUR, GetRValue(*foregroundColour), GetGValue(*foregroundColour), 
+		GetBValue(*foregroundColour));
 
 	char ch_Buf[200];
-	sprintf_s(ch_Buf, "%s=%i,%i,%i", CHILD_COLOUR, ch_RGB->r, ch_RGB->g, ch_RGB->b);
+	sprintf_s(ch_Buf, "%s=%i,%i,%i", CHILD_COLOUR, GetRValue(*childColour), GetGValue(*childColour), GetBValue(*childColour));
 
 	char lp_Buf[200];
 	sprintf_s(lp_Buf, "%s=%i,%i", LAST_POS, lastX, lastY);
@@ -138,16 +144,22 @@ void ConfigManager::WriteData()
 			currentFont->lfOutPrecision, currentFont->lfClipPrecision, currentFont->lfQuality, currentFont->lfPitchAndFamily, fontName);
 	}
 
+	char ul_txt_Buf[200];
+	sprintf_s(ul_txt_Buf, "%s=%i,%i,%i", UPLOAD_TXT_COLOUR, GetRValue(*uploadTxtColour), GetGValue(*uploadTxtColour),
+		GetBValue(*uploadTxtColour));
+
+	char dl_txt_Buf[200];
+	sprintf_s(dl_txt_Buf, "%s=%i,%i,%i", DOWNLOAD_TXT_COLOUR, GetRValue(*downloadTxtColour), GetGValue(*downloadTxtColour),
+		GetBValue(*downloadTxtColour));
+
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 	std::ofstream configFile(pathBuf);
 
 	// Write to the file
-	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n";
+	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n";
 
 	configFile.close();
-
-	delete fg_RGB, ch_RGB;
 }
 
 //PURPOSE: Convert from Unicode(Wide), used by UIManager to Ansi
@@ -249,6 +261,34 @@ bool ConfigManager::ReadData()
 			{
 				memcpy(currentFont, &font, sizeof(LOGFONT));
 			}
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), UPLOAD_TXT_COLOUR, 17))
+		{
+			COLORREF val = ProcessRGB(dataStart);
+			int r = GetRValue(val);
+
+			if (r == -1)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			*uploadTxtColour = val;
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), DOWNLOAD_TXT_COLOUR, 17))
+		{
+			COLORREF val = ProcessRGB(dataStart);
+			int r = GetRValue(val);
+
+			if (r == -1)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			*downloadTxtColour = val;
 			++readCount;
 		}
 	}

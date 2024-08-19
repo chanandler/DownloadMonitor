@@ -4,13 +4,15 @@
 
 #define CONFIG_NAME "downloadmonitor_config.cfg"
 
-#define PARAM_COUNT 5
+#define PARAM_COUNT 7
 
 #define FOREGROUND_COLOUR "FOREGROUND_COLOUR"
 #define CHILD_COLOUR "CHILD_COLOUR"
 #define LAST_POS "LAST_POS"
 #define OPACITY "OPACITY"
 #define FONT "FONT"
+#define UPLOAD_TXT_COLOUR "UPLOAD_TXT_COLOUR"
+#define DOWNLOAD_TXT_COLOUR "DOWNLOAD_TXT_COLOUR"
 
 enum FONT_ENUM
 {
@@ -66,6 +68,10 @@ public:
 	void UpdateForegroundColour(COLORREF fg_col);
 	void UpdateChildColour(COLORREF ch_col);
 
+	void UpdateUploadTextColour(COLORREF fg_col);
+
+	void UpdateDownloadTextColour(COLORREF ch_col);
+
 	void UpdateWindowPos(int x, int y);
 
 	void UpdateFont(LOGFONT f);
@@ -76,6 +82,10 @@ public:
 
 	COLORREF* foregroundColour;
 	COLORREF* childColour;
+
+	COLORREF* uploadTxtColour;
+	COLORREF* downloadTxtColour;
+
 	COLORREF* customColBuf;
 
 	LOGFONT* currentFont;

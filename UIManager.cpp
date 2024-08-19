@@ -7,7 +7,6 @@ UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
 ConfigManager* UIManager::configManager = NULL;
 
-
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
 	instance = this;
@@ -35,14 +34,84 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
-	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED",  WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
+	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
+
+	//Load upload/download bitmaps into HDC memory
+	uploadIconInst = (HBITMAP)LoadImage(hInst, MAKEINTRESOURCE(IDB_UP_ARROW), IMAGE_BITMAP, 0, 0, NULL);
+	uploadIconHDC = CreateCompatibleDC(NULL);
+	SelectObject(uploadIconHDC, uploadIconInst);
+	GetObject((HGDIOBJ)uploadIconInst, sizeof(uploadIconBm), &uploadIconBm);
+
+	downloadIconInst = (HBITMAP)LoadImage(hInst, MAKEINTRESOURCE(IDB_DOWN_ARROW), IMAGE_BITMAP, 0, 0, NULL);
+	downloadIconHDC = CreateCompatibleDC(NULL);
+	SelectObject(downloadIconHDC, downloadIconInst);
+	GetObject((HGDIOBJ)downloadIconInst, sizeof(downloadIconBm), &downloadIconBm);
+
+	UpdateBitmapColours();
 
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
+
 	//Move to last known pos
 	SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
+}
+
+void UIManager::UpdateBitmapColours()
+{
+	//To achieve download/upload icons that match the selected text colour, we must:
+	//Load in a bitmap with transparent areas set to black, and fillable areas set to white
+	//Retrieve each pixel/bit in the map, using GetDIBits
+	//Loop through each pixel and if it is equal to white, save the index as that check will fail subsequent times due to the colour being changed to the user's preference
+	//Set all saved indexes to the required colour, and write this new data to the bitmap
+	//
+	//In ChildProc(), we draw the bitmaps via TransparentBlt, which allows us to pass in the colour used for transparency (in our case black)
+	//Whenever a colour change is required, we run through again and apply the new colour to the cached indexes
+
+	SetBmToColour(uploadIconBm, uploadIconInst, uploadIconHDC, *configManager->uploadTxtColour, uploadBMIndexes);
+	SetBmToColour(downloadIconBm, downloadIconInst, downloadIconHDC, *configManager->downloadTxtColour, downloadBMIndexes);
+}
+
+void UIManager::SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr)
+{
+	BITMAPINFO bmInfo = { 0 };
+
+	bmInfo.bmiHeader.biWidth = bm.bmWidth;
+	bmInfo.bmiHeader.biHeight = bm.bmHeight;
+	bmInfo.bmiHeader.biPlanes = 1;
+	bmInfo.bmiHeader.biBitCount = 32;
+	bmInfo.bmiHeader.biSize = sizeof(bmInfo.bmiHeader);
+
+	GetDIBits(hdc, bmInst, 0, 0, NULL, &bmInfo, DIB_RGB_COLORS);
+
+	std::vector<COLORREF> pixels(bm.bmWidth * bm.bmHeight);
+
+	GetDIBits(hdc, bmInst, 0, bmInfo.bmiHeader.biHeight, &pixels[0], &bmInfo, DIB_RGB_COLORS);
+
+	if (cacheArr.size() == 0)
+	{
+		for (int i = 0; i < pixels.size(); i++)
+		{
+			if (pixels[i] == RGB(255, 255, 255)) //If this pixel is white
+			{
+				cacheArr.push_back(i); //Save the index
+			}
+		}
+	}
+
+	for (int i = 0; i < cacheArr.size(); i++)
+	{
+		pixels[cacheArr[i]] = COLORREFToRGB(col); //Change the colour
+	}
+
+	SetDIBits(hdc, bmInst, 0, bm.bmHeight, &pixels[0], &bmInfo, DIB_RGB_COLORS);
+}
+
+COLORREF UIManager::COLORREFToRGB(COLORREF Col)
+{
+	//COLORREF is so old it stores in BGR instead of RGB
+	return RGB(GetBValue(Col), GetGValue(Col), GetRValue(Col));
 }
 
 UIManager::~UIManager()
@@ -50,6 +119,12 @@ UIManager::~UIManager()
 	free(ansiArgs);
 	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
 	running = false;
+	//Clean up bitmaps
+	DeleteDC(downloadIconHDC);
+	DeleteDC(uploadIconHDC);
+	DeleteObject(downloadIconInst);
+	DeleteObject(uploadIconInst);
+	
 	delete netManager;
 	delete configManager;
 }
@@ -99,8 +174,8 @@ void UIManager::UpdateInfo()
 			ul = ulMbps;
 		}
 
-		swprintf_s(dlBuf, L"↓ %.1lf %s", dl, dlKbps ? L"kbps" : L"Mbps");
-		swprintf_s(ulBuf, L"↑ %.1lf %s", ul, ulKbps ? L"kbps" : L"Mbps");
+		swprintf_s(dlBuf, L"%.1lf %s", dl, dlKbps ? L"kbps" : L"Mbps");
+		swprintf_s(ulBuf, L"%.1lf %s", ul, ulKbps ? L"kbps" : L"Mbps");
 
 		SetWindowText(instance->dlChildWindow, dlBuf);
 		SetWindowText(instance->ulChildWindow, ulBuf);
@@ -167,7 +242,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	{
 		return NULL;
 	}
-											
+
 	UpdateOpacity(hWnd);
 
 	DWORD currentStyle = GetWindowLong(hWnd, GWL_STYLE);
@@ -236,16 +311,23 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		HBRUSH brush = CreateSolidBrush(*instance->configManager->childColour);
 		FillRect(hdc, &ps.rcPaint, brush);
 		SetBkMode(hdc, TRANSPARENT);
-		HFONT txtFont =CreateFontIndirect(instance->configManager->currentFont);
+		HFONT txtFont = CreateFontIndirect(instance->configManager->currentFont);
 		SelectObject(hdc, txtFont);
+
 		if (hWnd == instance->dlChildWindow)
 		{
-			SetTextColor(hdc, RGB(200, 10, 10));
+			TransparentBlt(hdc, ARROW_X_OFFSET, ARROW_Y_OFFSET, instance->downloadIconBm.bmWidth / ARROW_SIZE_DIV, instance->downloadIconBm.bmHeight / ARROW_SIZE_DIV,
+				instance->downloadIconHDC, 0, 0, instance->downloadIconBm.bmWidth, instance->downloadIconBm.bmHeight, RGB(0, 0, 0));
+
+			SetTextColor(hdc, *instance->configManager->downloadTxtColour);
 			DrawText(hdc, instance->dlBuf, lstrlenW(instance->dlBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
 		}
 		else if (hWnd == instance->ulChildWindow)
 		{
-			SetTextColor(hdc, RGB(10, 200, 10));
+			TransparentBlt(hdc, ARROW_X_OFFSET, ARROW_Y_OFFSET, instance->uploadIconBm.bmWidth / ARROW_SIZE_DIV, instance->uploadIconBm.bmHeight / ARROW_SIZE_DIV,
+				instance->uploadIconHDC, 0, 0, instance->uploadIconBm.bmWidth, instance->uploadIconBm.bmHeight, RGB(0, 0, 0));
+
+			SetTextColor(hdc, *instance->configManager->uploadTxtColour);
 			DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
 		}
 		EndPaint(hWnd, &ps);
@@ -259,7 +341,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		LPWSTR msg = (LPWSTR)lParam;
 
 
-		if (hWnd == instance->dlChildWindow) 
+		if (hWnd == instance->dlChildWindow)
 		{
 			ZeroMemory(instance->dlBuf, 200);
 			wcscpy(instance->dlBuf, msg);
@@ -422,61 +504,55 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}
-		else if (LOWORD(wParam) == IDC_FONT)
-		{
-			CHOOSEFONT fontStruct = { 0 };
-			fontStruct.lStructSize = sizeof(CHOOSEFONT);
-			fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE;
-			fontStruct.nSizeMin = 4;
-			fontStruct.nSizeMax = 12;
-			fontStruct.hwndOwner = hDlg;
-			fontStruct.lpLogFont = instance->configManager->currentFont;
-
-			if(ChooseFont(&fontStruct))
-			{
-				instance->configManager->UpdateFont(*fontStruct.lpLogFont);
-			}
-		}
-		else if(LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
+		else if (LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
 		{
 			bool isPrimary = LOWORD(wParam) == IDC_PRIMARY_COLOUR;
-			CHOOSECOLOR colorStruct = { 0 };
-			colorStruct.hwndOwner = instance->roothWnd;
-			colorStruct.lStructSize = sizeof(CHOOSECOLOR);
-			colorStruct.rgbResult = isPrimary ? *instance->configManager->foregroundColour : *instance->configManager->childColour;
-			colorStruct.lpCustColors = instance->configManager->customColBuf;
-			colorStruct.Flags = CC_ANYCOLOR | CC_RGBINIT;
-			ChooseColor(&colorStruct);
+			COLORREF rgbResult = instance->ShowColourDialog(hDlg,
+				isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour, CC_ANYCOLOR | CC_RGBINIT);
 
-			int fg_r = GetRValue(colorStruct.rgbResult);
-			int fg_g = GetGValue(colorStruct.rgbResult);
-			int fg_b = GetBValue(colorStruct.rgbResult);
-
-			if(isPrimary)
+			if (isPrimary)
 			{
-				instance->configManager->UpdateForegroundColour(colorStruct.rgbResult);
+				instance->configManager->UpdateForegroundColour(rgbResult);
 			}
 			else
 			{
-				instance->configManager->UpdateChildColour(colorStruct.rgbResult);
+				instance->configManager->UpdateChildColour(rgbResult);
 			}
 
 			//Force repaint to apply colours
 			instance->ForceRepaint();
 		}
-		else if(LOWORD(wParam) == IDC_RESET_COLOURS)
+		else if (LOWORD(wParam) == IDC_RESET_COLOURS)
 		{
 			instance->configManager->ResetConfig();
 			instance->UpdateOpacity(instance->roothWnd);
 			instance->ForceRepaint();
+			instance->UpdateBitmapColours();
 		}
 		else if (LOWORD(wParam) == IDC_OPACITY)
 		{
 			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_OPACITY), hDlg, OpacityProc);
 		}
+		else if (LOWORD(wParam) == IDC_TEXT)
+		{
+			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_TEXT), hDlg, TextProc);
+		}
 		break;
 	}
 	return (INT_PTR)FALSE;
+}
+
+COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)
+{
+	CHOOSECOLOR colorStruct = { 0 };
+	colorStruct.hwndOwner = owner;
+	colorStruct.lStructSize = sizeof(CHOOSECOLOR);
+	colorStruct.rgbResult = *initCol;
+	colorStruct.lpCustColors = instance->configManager->customColBuf;
+	colorStruct.Flags = flags;
+	ChooseColor(&colorStruct);
+
+	return colorStruct.rgbResult;
 }
 
 INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
@@ -497,7 +573,7 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 			HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
 			int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
 
-			if(newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
+			if (newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
 			{
 				instance->configManager->UpdateOpacity(newVal);
 				instance->UpdateOpacity(instance->roothWnd);
@@ -511,7 +587,7 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}
-		if(LOWORD(wParam) == IDCANCEL)
+		if (LOWORD(wParam) == IDCANCEL)
 		{
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
@@ -520,6 +596,91 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 	}
 	return (INT_PTR)FALSE;
 }
+
+INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		return (INT_PTR)TRUE;
+	}
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		else if (LOWORD(wParam) == IDC_FONT)
+		{
+			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_FONT_WARNING), hDlg, FontWarningProc);
+		}
+		else if (LOWORD(wParam) == IDC_UPLOAD_COL || LOWORD(wParam) == IDC_DOWNLOAD_COL)
+		{
+			bool isUploadCol = LOWORD(wParam) == IDC_UPLOAD_COL;
+
+			COLORREF rgbResult = instance->ShowColourDialog(hDlg,
+				isUploadCol ? instance->configManager->uploadTxtColour : instance->configManager->downloadTxtColour, CC_ANYCOLOR | CC_RGBINIT);
+
+			if (isUploadCol)
+			{
+				instance->configManager->UpdateUploadTextColour(rgbResult);
+			}
+			else
+			{
+				instance->configManager->UpdateDownloadTextColour(rgbResult);
+			}
+
+			instance->UpdateBitmapColours();
+		}
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			if (LOWORD(wParam) == IDOK) 
+			{
+				ShowWindow(hDlg, SW_HIDE);
+
+				CHOOSEFONT fontStruct = { 0 };
+				fontStruct.lStructSize = sizeof(CHOOSEFONT);
+				fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY | CF_FIXEDPITCHONLY;
+				fontStruct.nSizeMin = 4;
+				fontStruct.nSizeMax = 12;
+				fontStruct.hwndOwner = hDlg;
+				fontStruct.lpLogFont = instance->configManager->currentFont;
+
+				if (ChooseFont(&fontStruct))
+				{
+					instance->configManager->UpdateFont(*fontStruct.lpLogFont);
+				}
+			}
+			
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
 
 void UIManager::ForceRepaint()
 {
@@ -530,7 +691,7 @@ void UIManager::ForceRepaint()
 
 UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	switch(message)
+	switch (message)
 	{
 	case WM_DESTROY: //Intercept this message from the colour picker so we know when to apply the selection
 		//Don't need to do it this way
