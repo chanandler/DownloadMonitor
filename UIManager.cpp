@@ -320,7 +320,9 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				instance->downloadIconHDC, 0, 0, instance->downloadIconBm.bmWidth, instance->downloadIconBm.bmHeight, RGB(0, 0, 0));
 
 			SetTextColor(hdc, *instance->configManager->downloadTxtColour);
-			DrawText(hdc, instance->dlBuf, lstrlenW(instance->dlBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
+
+			ps.rcPaint.left += 15;
+			DrawText(hdc, instance->dlBuf, lstrlenW(instance->dlBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
 		}
 		else if (hWnd == instance->ulChildWindow)
 		{
@@ -328,7 +330,8 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				instance->uploadIconHDC, 0, 0, instance->uploadIconBm.bmWidth, instance->uploadIconBm.bmHeight, RGB(0, 0, 0));
 
 			SetTextColor(hdc, *instance->configManager->uploadTxtColour);
-			DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER);
+			ps.rcPaint.right += 15;
+			DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
 		}
 		EndPaint(hWnd, &ps);
 		DeleteObject(brush);
@@ -661,7 +664,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 
 				CHOOSEFONT fontStruct = { 0 };
 				fontStruct.lStructSize = sizeof(CHOOSEFONT);
-				fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY | CF_FIXEDPITCHONLY;
+				fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY;
 				fontStruct.nSizeMin = 4;
 				fontStruct.nSizeMax = 12;
 				fontStruct.hwndOwner = hDlg;
