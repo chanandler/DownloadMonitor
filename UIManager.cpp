@@ -13,10 +13,11 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	netManager = new NetworkManager();
 
 	configManager = new ConfigManager(lpCmdLine);
+
 	if (!configManager->ReadData()) //If init failed, kill program
 	{
 		MessageBox(NULL, L"Failed to initialise config, is the supplied path valid?", L"NetworkManager", MB_OK);
-		SendMessage(roothWnd, WM_CLOSE, NULL, NULL);
+		exit(-1);
 		return;
 	}
 
@@ -25,15 +26,17 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	LoadStringW(hInstance, IDC_DOWNLOAD_APP, szWindowClass, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_CHILD_STATIC_NAME, szChildStaticWindowClass, MAX_LOADSTRING);
 	RegisterWindowClass(hInstance);
-	ATOM a = RegisterChildWindowClass(hInstance);
+	RegisterChildWindowClass(hInstance);
 	roothWnd = InitInstance(hInstance, nCmdShow);
+
 	// Perform application initialization:
 	if (roothWnd == NULL)
 	{
 		MessageBox(NULL, L"Failed to create window, shutting down!", L"NetworkManager", MB_OK);
+		exit(-1); 
 		return;
 	}
-
+	
 	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
 
@@ -116,9 +119,9 @@ COLORREF UIManager::COLORREFToRGB(COLORREF Col)
 
 UIManager::~UIManager()
 {
-	free(ansiArgs);
 	Shell_NotifyIcon(NIM_DELETE, &trayIcon);
 	running = false;
+
 	//Clean up bitmaps
 	DeleteDC(downloadIconHDC);
 	DeleteDC(uploadIconHDC);
@@ -308,9 +311,13 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);				//CHILD WINDOW BACKGROUND COLOUR
-		HBRUSH brush = CreateSolidBrush(*instance->configManager->childColour);
+
+		HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
+		SetDCBrushColor(hdc, *instance->configManager->childColour);
+
 		FillRect(hdc, &ps.rcPaint, brush);
 		SetBkMode(hdc, TRANSPARENT);
+
 		HFONT txtFont = CreateFontIndirect(instance->configManager->currentFont);
 		SelectObject(hdc, txtFont);
 
@@ -334,7 +341,6 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
 		}
 		EndPaint(hWnd, &ps);
-		DeleteObject(brush);
 		DeleteObject(txtFont);
 		break;
 	}
@@ -451,10 +457,12 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);			//OUTER/PRIMARY COLOUR
-		HBRUSH brush = CreateSolidBrush(*instance->configManager->foregroundColour);
+
+		HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
+		SetDCBrushColor(hdc, *instance->configManager->foregroundColour);
+
 		FillRect(hdc, &ps.rcPaint, brush);
 		EndPaint(hWnd, &ps);
-		DeleteObject(brush);
 	}
 	break;
 	case WM_DESTROY:

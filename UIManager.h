@@ -95,7 +95,5 @@ private:
 	static INT_PTR FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	void ForceRepaint();
 	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-
-	char* ansiArgs = nullptr;
 };
 

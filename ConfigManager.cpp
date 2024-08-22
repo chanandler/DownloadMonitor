@@ -307,9 +307,9 @@ bool ConfigManager::ReadData()
 
 		retriedOnce = true;
 		InitDefaults();
-		ReadData();
+		return ReadData();
 	}
-
+	
 	return true;
 }
 
