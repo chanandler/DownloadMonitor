@@ -21,6 +21,8 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
+	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
 	// Initialize global strings
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_DOWNLOAD_APP, szWindowClass, MAX_LOADSTRING);
@@ -37,8 +39,15 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 	
-	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 10, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
-	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, 110, 4, 100, 20, roothWnd, NULL, hInstance, NULL);
+	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, DL_INITIAL_X,
+		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
+	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, UL_INITIAL_X,
+		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
+
+	//Do initial DPI update
+	InitForDPI(roothWnd, ROOT_INITIAL_WIDTH, ROOT_INITIAL_HEIGHT, configManager->lastX, configManager->lastY, true);
+	InitForDPI(dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
+	InitForDPI(ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
 	//Load upload/download bitmaps into HDC memory
 	uploadIconInst = (HBITMAP)LoadImage(hInst, MAKEINTRESOURCE(IDB_UP_ARROW), IMAGE_BITMAP, 0, 0, NULL);
@@ -58,7 +67,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	mainThread.detach();
 
 	//Move to last known pos
-	SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
+	//SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
 }
 
 void UIManager::UpdateBitmapColours()
@@ -239,7 +248,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	hInst = hInstance; // Store instance handle in our global variable
 
 	HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE, szWindowClass, szTitle, WS_POPUP,
-		CW_USEDEFAULT, 0, 220, 28, nullptr, nullptr, hInstance, nullptr);
+		CW_USEDEFAULT, 0, ROOT_INITIAL_WIDTH, ROOT_INITIAL_HEIGHT, nullptr, nullptr, hInstance, nullptr);
 
 	if (!hWnd)
 	{
@@ -318,12 +327,23 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		FillRect(hdc, &ps.rcPaint, brush);
 		SetBkMode(hdc, TRANSPARENT);
 
-		HFONT txtFont = CreateFontIndirect(instance->configManager->currentFont);
+
+		LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+
+		memcpy(modFont, instance->configManager->currentFont, sizeof(LOGFONT));
+		
+		std::tuple<int, int> fontScale = instance->GetFontScaleForDPI();
+
+		modFont->lfWidth = std::get<0>(fontScale);
+		modFont->lfHeight = std::get<1>(fontScale);
+
+		HFONT txtFont = CreateFontIndirect(modFont);
 		SelectObject(hdc, txtFont);
 
+		BitmapScaleInfo info = instance->GetBmScaleForDPI();
 		if (hWnd == instance->dlChildWindow)
 		{
-			TransparentBlt(hdc, ARROW_X_OFFSET, ARROW_Y_OFFSET, instance->downloadIconBm.bmWidth / ARROW_SIZE_DIV, instance->downloadIconBm.bmHeight / ARROW_SIZE_DIV,
+			TransparentBlt(hdc, info.xPos, info.yPos, instance->downloadIconBm.bmWidth / info.scaleDiv, instance->downloadIconBm.bmHeight / info.scaleDiv,
 				instance->downloadIconHDC, 0, 0, instance->downloadIconBm.bmWidth, instance->downloadIconBm.bmHeight, RGB(0, 0, 0));
 
 			SetTextColor(hdc, *instance->configManager->downloadTxtColour);
@@ -333,7 +353,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		else if (hWnd == instance->ulChildWindow)
 		{
-			TransparentBlt(hdc, ARROW_X_OFFSET, ARROW_Y_OFFSET, instance->uploadIconBm.bmWidth / ARROW_SIZE_DIV, instance->uploadIconBm.bmHeight / ARROW_SIZE_DIV,
+			TransparentBlt(hdc, info.xPos, info.yPos, instance->uploadIconBm.bmWidth / info.scaleDiv, instance->uploadIconBm.bmHeight / info.scaleDiv,
 				instance->uploadIconHDC, 0, 0, instance->uploadIconBm.bmWidth, instance->uploadIconBm.bmHeight, RGB(0, 0, 0));
 
 			SetTextColor(hdc, *instance->configManager->uploadTxtColour);
@@ -342,6 +362,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		EndPaint(hWnd, &ps);
 		DeleteObject(txtFont);
+		free(modFont);
 		break;
 	}
 	case WM_SETTEXT:
@@ -465,11 +486,74 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		EndPaint(hWnd, &ps);
 	}
 	break;
+	case WM_DPICHANGED:
+	{
+		instance->UpdateForDPI(hWnd, (RECT*)lParam);
+		instance->InitForDPI(instance->dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
+		instance->InitForDPI(instance->ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
+
+		break;
+	}
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
+{
+	int xPos = newRct->left;
+	int yPos = newRct->top;	
+	
+	int	scaledWidth = newRct->right - newRct->left;
+	int	scaledHeight = newRct->bottom - newRct->top;
+	
+	SetWindowPos(hWnd, hWnd, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos)
+{
+	int currDPI = GetDpiForWindow(hWnd);
+
+	int scaledX = dontScalePos ? initialX : MulDiv(initialX, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int scaledY = dontScalePos ? initialY : MulDiv(initialY, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int scaledWidth = MulDiv(initialWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int scaledHeight = MulDiv(initialHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+	SetWindowPos(hWnd, hWnd, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+std::tuple<int,int> UIManager::GetFontScaleForDPI()
+{
+	int currDPI = GetDpiForWindow(instance->roothWnd);
+
+	int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int scaledHeight = MulDiv(configManager->currentFont->lfHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+	return std::make_tuple(scaledWidth, scaledHeight);
+}
+
+BitmapScaleInfo UIManager::GetBmScaleForDPI()
+{
+	int currDPI = GetDpiForWindow(roothWnd);
+
+	int scaledX = MulDiv(ARROW_X_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+	int scaledY = MulDiv(ARROW_Y_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+	int diff = MulDiv(ARROW_SIZE_DIV, currDPI, USER_DEFAULT_SCREEN_DPI) - ARROW_SIZE_DIV;
+	
+	int scaleDiv = ARROW_SIZE_DIV - diff;
+
+	if(scaleDiv < MIN_ARROW_SCALE_DIV)
+	{
+		scaleDiv = MIN_ARROW_SCALE_DIV;
+	}
+
+	return BitmapScaleInfo(scaledX, scaledY, scaleDiv);
 }
 
 void UIManager::WriteWindowPos()

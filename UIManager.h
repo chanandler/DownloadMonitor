@@ -33,6 +33,33 @@
 #define ARROW_X_OFFSET 4
 #define ARROW_Y_OFFSET 4
 #define ARROW_SIZE_DIV 5
+#define MIN_ARROW_SCALE_DIV 3
+
+
+//Base values before any DPI scaling
+#define ROOT_INITIAL_WIDTH 220
+#define ROOT_INITIAL_HEIGHT 28
+
+#define DL_INITIAL_X 10
+#define UL_INITIAL_X 110
+
+#define CHILD_INITIAL_Y 4
+#define CHILD_INITIAL_WIDTH 100
+#define CHILD_INITIAL_HEIGHT 20
+
+struct BitmapScaleInfo
+{
+	int xPos;
+	int yPos;
+	int scaleDiv;
+
+	BitmapScaleInfo(int Xpos, int YPos, int ScaleDiv)
+	{
+		xPos = Xpos;
+		yPos = YPos;
+		scaleDiv = ScaleDiv;
+	}
+};
 
 class UIManager
 {
@@ -85,6 +112,10 @@ private:
 	void UpdateOpacity(HWND hWnd);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	void UpdateForDPI(HWND hWnd, RECT* newRct);
+	void InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos = false);
+	std::tuple<int, int>  GetFontScaleForDPI();
+	BitmapScaleInfo GetBmScaleForDPI();
 	void WriteWindowPos();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
