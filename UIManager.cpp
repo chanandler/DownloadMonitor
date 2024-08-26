@@ -865,6 +865,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 				if (ChooseFont(&fontStruct))
 				{
 					instance->configManager->UpdateFont(*fontStruct.lpLogFont);
+					instance->UpdateFontScaleForDPI();
 				}
 			}
 			
