@@ -35,6 +35,7 @@
 #define ARROW_SIZE_DIV 5
 #define MIN_ARROW_SCALE_DIV 2
 
+#define VERSION_NUMBER L"Version 0.8"
 
 //Base values before any DPI scaling
 #define ROOT_INITIAL_WIDTH 220

@@ -657,7 +657,17 @@ INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LP
 	switch (message)
 	{
 	case WM_INITDIALOG:
+	{
+		HWND vTxt = GetDlgItem(hDlg, IDC_VER_TXT);
+		if (vTxt != NULL)
+		{
+			SendMessage(vTxt, WM_SETTEXT, 0, (LPARAM) VERSION_NUMBER);
+		}
+
 		return (INT_PTR)TRUE;
+	}
+		
+	
 
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
