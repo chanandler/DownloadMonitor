@@ -33,7 +33,7 @@
 #define ARROW_X_OFFSET 4
 #define ARROW_Y_OFFSET 4
 #define ARROW_SIZE_DIV 5
-#define MIN_ARROW_SCALE_DIV 3
+#define MIN_ARROW_SCALE_DIV 2
 
 
 //Base values before any DPI scaling
@@ -47,17 +47,33 @@
 #define CHILD_INITIAL_WIDTH 100
 #define CHILD_INITIAL_HEIGHT 20
 
-struct BitmapScaleInfo
+class BitmapScaleInfo
 {
+public:
 	int xPos;
 	int yPos;
-	int scaleDiv;
+	int width;
+	int height;
 
-	BitmapScaleInfo(int Xpos, int YPos, int ScaleDiv)
+	BitmapScaleInfo(int Xpos, int YPos, int Width, int Height)
 	{
 		xPos = Xpos;
 		yPos = YPos;
-		scaleDiv = ScaleDiv;
+		width = Width;
+		height = Height;
+	}
+};
+
+class FontScaleInfo
+{
+public:
+	int width;
+	int height;
+
+	FontScaleInfo(int Width, int Height)
+	{
+		width = Width;
+		height = Height;
 	}
 };
 
@@ -104,6 +120,9 @@ private:
 	std::vector<int> uploadBMIndexes;
 	std::vector<int> downloadBMIndexes;
 
+	BitmapScaleInfo* bmScaleInfo;
+	FontScaleInfo* fontScaleInfo;
+
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
@@ -114,8 +133,8 @@ private:
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	void UpdateForDPI(HWND hWnd, RECT* newRct);
 	void InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos = false);
-	std::tuple<int, int>  GetFontScaleForDPI();
-	BitmapScaleInfo GetBmScaleForDPI();
+	void UpdateFontScaleForDPI();
+	void UpdateBmScaleForDPI();
 	void WriteWindowPos();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);

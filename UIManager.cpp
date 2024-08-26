@@ -44,11 +44,6 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, UL_INITIAL_X,
 		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
 
-	//Do initial DPI update
-	InitForDPI(roothWnd, ROOT_INITIAL_WIDTH, ROOT_INITIAL_HEIGHT, configManager->lastX, configManager->lastY, true);
-	InitForDPI(dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
-	InitForDPI(ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
-
 	//Load upload/download bitmaps into HDC memory
 	uploadIconInst = (HBITMAP)LoadImage(hInst, MAKEINTRESOURCE(IDB_UP_ARROW), IMAGE_BITMAP, 0, 0, NULL);
 	uploadIconHDC = CreateCompatibleDC(NULL);
@@ -61,6 +56,14 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	GetObject((HGDIOBJ)downloadIconInst, sizeof(downloadIconBm), &downloadIconBm);
 
 	UpdateBitmapColours();
+
+	//Do initial DPI update
+	instance->UpdateBmScaleForDPI();
+	instance->UpdateFontScaleForDPI();
+
+	InitForDPI(roothWnd, ROOT_INITIAL_WIDTH, ROOT_INITIAL_HEIGHT, configManager->lastX, configManager->lastY, true);
+	InitForDPI(dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
+	InitForDPI(ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
@@ -136,7 +139,17 @@ UIManager::~UIManager()
 	DeleteDC(uploadIconHDC);
 	DeleteObject(downloadIconInst);
 	DeleteObject(uploadIconInst);
+
+	if (bmScaleInfo)
+	{
+		delete bmScaleInfo;
+	}
 	
+	if (fontScaleInfo)
+	{
+		delete fontScaleInfo;
+	}
+
 	delete netManager;
 	delete configManager;
 }
@@ -329,21 +342,25 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 
 
 		LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+		if(modFont && instance->fontScaleInfo)
+		{
+			memcpy(modFont, instance->configManager->currentFont, sizeof(LOGFONT));
 
-		memcpy(modFont, instance->configManager->currentFont, sizeof(LOGFONT));
-		
-		std::tuple<int, int> fontScale = instance->GetFontScaleForDPI();
-
-		modFont->lfWidth = std::get<0>(fontScale);
-		modFont->lfHeight = std::get<1>(fontScale);
+			modFont->lfWidth = instance->fontScaleInfo->width;
+			modFont->lfHeight = instance->fontScaleInfo->height;
+		}
+		else
+		{
+			modFont = instance->configManager->currentFont;
+		}
 
 		HFONT txtFont = CreateFontIndirect(modFont);
 		SelectObject(hdc, txtFont);
 
-		BitmapScaleInfo info = instance->GetBmScaleForDPI();
+		BitmapScaleInfo* info = instance->bmScaleInfo;
 		if (hWnd == instance->dlChildWindow)
 		{
-			TransparentBlt(hdc, info.xPos, info.yPos, instance->downloadIconBm.bmWidth / info.scaleDiv, instance->downloadIconBm.bmHeight / info.scaleDiv,
+			TransparentBlt(hdc, info->xPos, info->yPos, info->width / ARROW_SIZE_DIV, info->height / ARROW_SIZE_DIV,
 				instance->downloadIconHDC, 0, 0, instance->downloadIconBm.bmWidth, instance->downloadIconBm.bmHeight, RGB(0, 0, 0));
 
 			SetTextColor(hdc, *instance->configManager->downloadTxtColour);
@@ -353,7 +370,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		else if (hWnd == instance->ulChildWindow)
 		{
-			TransparentBlt(hdc, info.xPos, info.yPos, instance->uploadIconBm.bmWidth / info.scaleDiv, instance->uploadIconBm.bmHeight / info.scaleDiv,
+			TransparentBlt(hdc, info->xPos, info->yPos, info->width / ARROW_SIZE_DIV, info->height / ARROW_SIZE_DIV,
 				instance->uploadIconHDC, 0, 0, instance->uploadIconBm.bmWidth, instance->uploadIconBm.bmHeight, RGB(0, 0, 0));
 
 			SetTextColor(hdc, *instance->configManager->uploadTxtColour);
@@ -362,14 +379,16 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		EndPaint(hWnd, &ps);
 		DeleteObject(txtFont);
-		free(modFont);
+		if(modFont)
+		{
+			free(modFont);
+		}
 		break;
 	}
 	case WM_SETTEXT:
 	{
 		//Intercept this message and handle it ourselves
 		LPWSTR msg = (LPWSTR)lParam;
-
 
 		if (hWnd == instance->dlChildWindow)
 		{
@@ -488,7 +507,14 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	break;
 	case WM_DPICHANGED:
 	{
+		//Update font and bitmap scale values
+		instance->UpdateBmScaleForDPI();
+		instance->UpdateFontScaleForDPI();
+
+		//The message provides suggested scale/position via the lParam, so apply that
 		instance->UpdateForDPI(hWnd, (RECT*)lParam);
+
+		//Update the child windows scale to match our new DPI
 		instance->InitForDPI(instance->dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
 		instance->InitForDPI(instance->ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
@@ -511,6 +537,8 @@ void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
 	
 	SetWindowPos(hWnd, hWnd, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+	WriteWindowPos();
 }
 
 void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos)
@@ -526,17 +554,22 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
-std::tuple<int,int> UIManager::GetFontScaleForDPI()
+void UIManager::UpdateFontScaleForDPI()
 {
-	int currDPI = GetDpiForWindow(instance->roothWnd);
+	int currDPI = GetDpiForWindow(roothWnd);
 
 	int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
 	int scaledHeight = MulDiv(configManager->currentFont->lfHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
 
-	return std::make_tuple(scaledWidth, scaledHeight);
+	if(fontScaleInfo)
+	{
+		delete fontScaleInfo;
+	}
+
+	fontScaleInfo = new FontScaleInfo(scaledWidth, scaledHeight);
 }
 
-BitmapScaleInfo UIManager::GetBmScaleForDPI()
+void UIManager::UpdateBmScaleForDPI()
 {
 	int currDPI = GetDpiForWindow(roothWnd);
 
@@ -544,16 +577,16 @@ BitmapScaleInfo UIManager::GetBmScaleForDPI()
 
 	int scaledY = MulDiv(ARROW_Y_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
 
-	int diff = MulDiv(ARROW_SIZE_DIV, currDPI, USER_DEFAULT_SCREEN_DPI) - ARROW_SIZE_DIV;
-	
-	int scaleDiv = ARROW_SIZE_DIV - diff;
+	//Download and upload have the same dimensions so we can do this
+	int width = MulDiv(instance->downloadIconBm.bmWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int height = MulDiv(instance->downloadIconBm.bmHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
 
-	if(scaleDiv < MIN_ARROW_SCALE_DIV)
+	if(bmScaleInfo)
 	{
-		scaleDiv = MIN_ARROW_SCALE_DIV;
+		delete bmScaleInfo;
 	}
 
-	return BitmapScaleInfo(scaledX, scaledY, scaleDiv);
+	bmScaleInfo = new BitmapScaleInfo(scaledX, scaledY, width, height);
 }
 
 void UIManager::WriteWindowPos()
@@ -623,6 +656,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			instance->UpdateOpacity(instance->roothWnd);
 			instance->ForceRepaint();
 			instance->UpdateBitmapColours();
+			instance->WriteWindowPos(); //We reset the whole cfg so re-write this
 		}
 		else if (LOWORD(wParam) == IDC_OPACITY)
 		{
