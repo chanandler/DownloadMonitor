@@ -4,26 +4,15 @@
 #include <string>
 #include <tchar.h>
 
-class IntRGB
-{
-public:
-	int r;
-	int g;
-	int b;
-
-	IntRGB(int R, int G, int B)
-	{
-		r = R;
-		g = G;
-		b = B;
-	}
-};
-
 const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\nUPLOAD_TXT_COLOUR=0,215,54\nDOWNLOAD_TXT_COLOUR = 255, 0, 0";
 
 ConfigManager::ConfigManager(LPWSTR configDirOverride)
 {
 	customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
+	if (customColBuf) 
+	{
+		memset(customColBuf, 0, sizeof(COLORREF));
+	}
 	foregroundColour = (COLORREF*)malloc(sizeof(COLORREF));
 	childColour = (COLORREF*)malloc(sizeof(COLORREF));
 	uploadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));

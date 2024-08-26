@@ -2,6 +2,7 @@
 #include "NetworkManager.h"
 #include "ConfigManager.h"
 #include "Commctrl.h"
+#include "shlwapi.h"
 
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
@@ -65,6 +66,8 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	InitForDPI(dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
 	InitForDPI(ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
+	//GetMaxScreenRect();
+
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
@@ -86,6 +89,18 @@ void UIManager::UpdateBitmapColours()
 
 	SetBmToColour(uploadIconBm, uploadIconInst, uploadIconHDC, *configManager->uploadTxtColour, uploadBMIndexes);
 	SetBmToColour(downloadIconBm, downloadIconInst, downloadIconHDC, *configManager->downloadTxtColour, downloadBMIndexes);
+}
+
+//TODO use this or something similar to work out if our requested coords are off screen
+void UIManager::GetMaxScreenRect()
+{
+	int currDPI = GetDpiForWindow(roothWnd);
+
+	int l = GetSystemMetricsForDpi(SM_XVIRTUALSCREEN, currDPI);
+	int r = GetSystemMetricsForDpi(SM_YVIRTUALSCREEN, currDPI);
+
+	int w = GetSystemMetricsForDpi(SM_CXVIRTUALSCREEN, currDPI);
+	int h = GetSystemMetricsForDpi(SM_CYVIRTUALSCREEN, currDPI);
 }
 
 void UIManager::SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr)
@@ -518,13 +533,31 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		instance->InitForDPI(instance->dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
 		instance->InitForDPI(instance->ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
+		instance->UpdatePosIfRequired();
+
 		break;
 	}
+	case WM_DISPLAYCHANGE:
+		instance->UpdatePosIfRequired();
+		break;
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+void UIManager::UpdatePosIfRequired()
+{
+	if(!IsOffScreen())
+	{
+		return;
+	}
+
+
+	//TODO get the actual max width instead of guessing
+	SetWindowPos(roothWnd, HWND_TOPMOST, 1200, 0, 0, 0, SWP_NOSIZE);
+	WriteWindowPos();
 }
 
 void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
@@ -550,8 +583,27 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 	int scaledWidth = MulDiv(initialWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
 	int scaledHeight = MulDiv(initialHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
 
+
 	SetWindowPos(hWnd, hWnd, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+bool UIManager::IsOffScreen()
+{
+	RECT rc; 
+	GetWindowRect(instance->roothWnd, &rc);
+
+	POINT p;
+	p.x = rc.left;
+	p.y = rc.top;
+	HMONITOR hMon = MonitorFromPoint(p, MONITOR_DEFAULTTONULL);
+	if (hMon == NULL)
+	{
+		//Point is off screen
+		return true;
+	}
+
+	return false;
 }
 
 void UIManager::UpdateFontScaleForDPI()
@@ -681,7 +733,11 @@ COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)
 	colorStruct.Flags = flags;
 	ChooseColor(&colorStruct);
 
-	return colorStruct.rgbResult;
+	WORD h, l, s;
+	ColorRGBToHLS(colorStruct.rgbResult , &h, &l, &s);
+	COLORREF r = ColorHLSToRGB(h, l, s);
+	//return colorStruct.rgbResult;
+	return r;
 }
 
 INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)

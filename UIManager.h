@@ -94,6 +94,7 @@ private:
 	WCHAR szChildStaticWindowClass[MAX_LOADSTRING];
 
 	void UpdateBitmapColours();
+	void GetMaxScreenRect();
 	COLORREF COLORREFToRGB(COLORREF Col);
 
 	bool running = false;
@@ -131,8 +132,10 @@ private:
 	void UpdateOpacity(HWND hWnd);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	void UpdatePosIfRequired();
 	void UpdateForDPI(HWND hWnd, RECT* newRct);
 	void InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos = false);
+	bool IsOffScreen();
 	void UpdateFontScaleForDPI();
 	void UpdateBmScaleForDPI();
 	void WriteWindowPos();
