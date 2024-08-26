@@ -66,7 +66,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	InitForDPI(dlChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, DL_INITIAL_X, CHILD_INITIAL_Y);
 	InitForDPI(ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
-	//GetMaxScreenRect();
+	UpdatePosIfRequired();
 
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
