@@ -221,7 +221,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 						bool added = false;
 						for (int j = 0; j < ret.size(); j++)
 						{
-							if (in < ret[j]->inBw && j > 0)
+							if ((finalIn < ret[j]->inBw && finalOut < ret[j]->outBw) && j > 0)
 							{
 								ret.insert(ret.begin() + j - 1, data);
 								added = true;

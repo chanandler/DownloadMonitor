@@ -15,7 +15,7 @@
 #include "vector"
 
 #define KILOBYTE 1024.0
-#define MAX_TOP_CONSUMERS 4
+#define MAX_TOP_CONSUMERS 10
 
 class ProcessData
 {

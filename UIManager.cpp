@@ -256,7 +256,7 @@ void UIManager::UpdateInfo()
 					{
 						wcscat(pNames, exName);
 						WCHAR bDataBuf[200];
-						swprintf_s(bDataBuf, L" ↓ %.1lf Mbps ↑ %.1lf Mbps\n", topCnsmrs[i]->inBw / DIV_FACTOR, topCnsmrs[i]->outBw / DIV_FACTOR);
+						swprintf_s(bDataBuf, L"	↓	%.1lf	Mbps	↑	%.1lf	Mbps\n", topCnsmrs[i]->inBw / DIV_FACTOR, topCnsmrs[i]->outBw / DIV_FACTOR);
 						wcscat(pNames, bDataBuf);
 					}
 				}
