@@ -48,6 +48,10 @@
 #define CHILD_INITIAL_WIDTH 100
 #define CHILD_INITIAL_HEIGHT 20
 
+#define POPUP_BUF_SIZE 1000
+#define POPUP_INITIAL_WIDTH 500
+#define POPUP_INITIAL_HEIGHT 150
+
 class BitmapScaleInfo
 {
 public:
@@ -93,6 +97,7 @@ private:
 	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 	WCHAR szChildStaticWindowClass[MAX_LOADSTRING];
+	WCHAR szPopupWindowClass[MAX_LOADSTRING];
 
 	void UpdateBitmapColours();
 	void GetMaxScreenRect();
@@ -104,6 +109,7 @@ private:
 
 	WCHAR dlBuf[200];
 	WCHAR ulBuf[200];
+	WCHAR puBuf[POPUP_BUF_SIZE];
 
 	HWND dlChildWindow;
 	HWND ulChildWindow;
@@ -125,14 +131,20 @@ private:
 	BitmapScaleInfo* bmScaleInfo;
 	FontScaleInfo* fontScaleInfo;
 
+	static BOOL hasMouseEvent;
+
+	HWND popup;
+
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
+	ATOM RegisterPopupWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void UpdateOpacity(HWND hWnd);
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	void ShowTopConsumersToolTip(POINT pos);
 	void UpdatePosIfRequired();
 	void UpdateForDPI(HWND hWnd, RECT* newRct);
 	void InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos = false);
@@ -141,6 +153,7 @@ private:
 	void UpdateBmScaleForDPI();
 	void WriteWindowPos();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);

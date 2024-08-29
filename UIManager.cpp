@@ -7,6 +7,7 @@
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
 ConfigManager* UIManager::configManager = NULL;
+BOOL UIManager::hasMouseEvent = FALSE;
 
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -28,18 +29,20 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_DOWNLOAD_APP, szWindowClass, MAX_LOADSTRING);
 	LoadStringW(hInstance, IDC_CHILD_STATIC_NAME, szChildStaticWindowClass, MAX_LOADSTRING);
+	LoadStringW(hInstance, IDC_POPUP_NAME, szPopupWindowClass, MAX_LOADSTRING);
 	RegisterWindowClass(hInstance);
 	RegisterChildWindowClass(hInstance);
+	RegisterPopupWindowClass(hInstance);
 	roothWnd = InitInstance(hInstance, nCmdShow);
 
 	// Perform application initialization:
 	if (roothWnd == NULL)
 	{
 		MessageBox(NULL, L"Failed to create window, shutting down!", L"NetworkManager", MB_OK);
-		exit(-1); 
+		exit(-1);
 		return;
 	}
-	
+
 	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, DL_INITIAL_X,
 		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, UL_INITIAL_X,
@@ -72,6 +75,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
 
+	//netManager->GetProcessUsageTable();
+	//ShowTopConsumersToolTip();
+
 	//Move to last known pos
 	//SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
 }
@@ -103,7 +109,7 @@ void UIManager::GetMaxScreenRect()
 	int h = GetSystemMetricsForDpi(SM_CYVIRTUALSCREEN, currDPI);
 }
 
-void UIManager::SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr)
+void UIManager::SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int>& cacheArr)
 {
 	BITMAPINFO bmInfo = { 0 };
 
@@ -159,7 +165,7 @@ UIManager::~UIManager()
 	{
 		delete bmScaleInfo;
 	}
-	
+
 	if (fontScaleInfo)
 	{
 		delete fontScaleInfo;
@@ -179,6 +185,7 @@ void UIManager::UpdateInfo()
 		SendMessage(instance->roothWnd, WM_CLOSE, NULL, NULL);
 		return;
 	}
+
 	while (instance->running)
 	{
 		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces);
@@ -222,6 +229,49 @@ void UIManager::UpdateInfo()
 
 		memset(dlBuf, 0, 100);
 		memset(ulBuf, 0, 100);
+
+		if (instance->popup != NULL) //Tick the popup if it exists
+		{
+			WCHAR pNames[POPUP_BUF_SIZE];
+			memset(pNames, 0, POPUP_BUF_SIZE);
+
+			std::vector<ProcessData*> topCnsmrs = netManager->GetTopConsumingProcesses();
+
+			if (topCnsmrs.size() > 0)
+			{
+				int end = topCnsmrs.size() - MAX_TOP_CONSUMERS;
+
+				if (end < 0)
+				{
+					end = 0;
+				}
+				for (int i = topCnsmrs.size() - 1; i > end; i--)
+				{
+					if (topCnsmrs[i]->skip)
+					{
+						continue;
+					}
+					LPWSTR exName = PathFindFileName(topCnsmrs[i]->name);
+					if (exName != NULL)
+					{
+						wcscat(pNames, exName);
+						WCHAR bDataBuf[200];
+						swprintf_s(bDataBuf, L" ↓ %.1lf Mbps ↑ %.1lf Mbps\n", topCnsmrs[i]->inBw / DIV_FACTOR, topCnsmrs[i]->outBw / DIV_FACTOR);
+						wcscat(pNames, bDataBuf);
+					}
+				}
+			}
+
+			SetWindowText(instance->popup, pNames);
+
+			if (topCnsmrs.size() > 0)
+			{
+				for (int i = 0; i < topCnsmrs.size(); i++)
+				{
+					delete topCnsmrs[i];
+				}
+			}
+		}
 
 		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
 	}
@@ -267,6 +317,27 @@ ATOM UIManager::RegisterChildWindowClass(HINSTANCE hInstance)
 	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
 	wcex.lpszClassName = szChildStaticWindowClass;
 	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_LOGO));
+
+	return RegisterClassEx(&wcex);
+}
+
+ATOM UIManager::RegisterPopupWindowClass(HINSTANCE hInstance)
+{
+	WNDCLASSEXW wcex;
+
+	wcex.cbSize = sizeof(WNDCLASSEX);
+
+	wcex.style = CS_HREDRAW | CS_VREDRAW | WS_EX_CLIENTEDGE;
+	wcex.lpfnWndProc = PopupProc;
+	wcex.cbClsExtra = 0;
+	wcex.cbWndExtra = 0;
+	wcex.hInstance = hInstance;
+	wcex.hIcon = NULL;
+	wcex.hCursor = NULL;
+	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
+	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
+	wcex.lpszClassName = szPopupWindowClass;
+	wcex.hIconSm = NULL;
 
 	return RegisterClassEx(&wcex);
 }
@@ -339,11 +410,39 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	}
 	//Pass these on to the root window
 	case WM_LBUTTONDOWN:
-		WndProc(instance->roothWnd, message, wParam, lParam);
-		break;
 	case WM_LBUTTONUP:
+	{
 		WndProc(instance->roothWnd, message, wParam, lParam);
 		break;
+	}
+	case WM_MOUSEMOVE:
+	{
+		if (hasMouseEvent == FALSE)
+		{
+			TRACKMOUSEEVENT tme{ 0 };
+			tme.cbSize = sizeof(TRACKMOUSEEVENT);
+			tme.dwFlags = TME_HOVER | TME_LEAVE;
+			tme.hwndTrack = hWnd;
+			tme.dwHoverTime = HOVER_DEFAULT;
+			hasMouseEvent = TrackMouseEvent(&tme);
+		}
+		break;
+	}
+	case WM_MOUSEHOVER:
+	{
+		POINT p;
+		p.x = GET_X_LPARAM(lParam);
+		p.y = GET_Y_LPARAM(lParam);
+		ClientToScreen(instance->roothWnd, &p);
+
+		instance->ShowTopConsumersToolTip(p);
+		break;
+	}
+	case WM_MOUSELEAVE:
+	{
+		hasMouseEvent = FALSE;
+		break;
+	}
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
@@ -355,9 +454,8 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		FillRect(hdc, &ps.rcPaint, brush);
 		SetBkMode(hdc, TRANSPARENT);
 
-
 		LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
-		if(modFont && instance->fontScaleInfo)
+		if (modFont && instance->fontScaleInfo)
 		{
 			memcpy(modFont, instance->configManager->currentFont, sizeof(LOGFONT));
 
@@ -394,7 +492,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		EndPaint(hWnd, &ps);
 		DeleteObject(txtFont);
-		if(modFont)
+		if (modFont)
 		{
 			free(modFont);
 		}
@@ -419,6 +517,79 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		GetClientRect(hWnd, &rc);
 		//Force a repaint (Will call WM_PAINT)
 		InvalidateRect(hWnd, &rc, FALSE);
+		break;
+	}
+	}
+	return DefWindowProc(hWnd, message, wParam, lParam);
+}
+
+LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+	case WM_COMMAND:
+	{
+		break;
+	}
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hWnd, &ps);
+
+		HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
+		FillRect(hdc, &ps.rcPaint, brush);
+
+		LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+		if (modFont && instance->fontScaleInfo)
+		{
+			memcpy(modFont, instance->configManager->currentFont, sizeof(LOGFONT));
+			wcscpy(modFont->lfFaceName, L"calibri"); //Force a font with unicode arrow support for now
+			modFont->lfWidth = instance->fontScaleInfo->width;
+			modFont->lfHeight = instance->fontScaleInfo->height;
+		}
+		else
+		{
+			modFont = instance->configManager->currentFont;
+		}
+
+		HFONT txtFont = CreateFontIndirect(modFont);
+
+		SelectObject(hdc, txtFont);
+		DrawText(hdc, instance->puBuf, -1, &ps.rcPaint, DT_CENTER | DT_NOCLIP);
+
+		EndPaint(hWnd, &ps);
+
+		break;
+	}
+	case WM_SETTEXT:
+	{
+		//Intercept this message and handle it ourselves
+		LPWSTR msg = (LPWSTR)lParam;
+
+		ZeroMemory(instance->puBuf, 200);
+		wcscpy(instance->puBuf, msg);
+
+		RECT rc;
+		GetClientRect(hWnd, &rc);
+		//Force a repaint (Will call WM_PAINT)
+		InvalidateRect(hWnd, &rc, FALSE);
+		break;
+	}
+	case WM_MOUSEMOVE:
+	{
+		TRACKMOUSEEVENT tme{ 0 };
+		tme.cbSize = sizeof(TRACKMOUSEEVENT);
+		tme.dwFlags = TME_HOVER | TME_LEAVE;
+		tme.hwndTrack = hWnd;
+		tme.dwHoverTime = HOVER_DEFAULT;
+		TrackMouseEvent(&tme);
+		break;
+	}
+	case WM_MOUSELEAVE:
+	{
+		//Destroy this popup when we leave it
+		DestroyWindow(hWnd);
+		instance->popup = NULL;
 		break;
 	}
 	}
@@ -479,8 +650,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			GetWindowRect(hWnd, &windowRect);
 
 			//Get the current mouse coordinates
-			mousePos.x = (int)(short)LOWORD(lParam);
-			mousePos.y = (int)(short)HIWORD(lParam);
+			mousePos.x = GET_X_LPARAM(lParam);
+			mousePos.y = GET_Y_LPARAM(lParam);
 
 			int windowHeight = windowRect.bottom - windowRect.top;
 			int windowWidth = windowRect.right - windowRect.left;
@@ -490,6 +661,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			//Set the window's new screen position
 			MoveWindow(hWnd, mousePos.x - (windowWidth / 2), mousePos.y, windowWidth, windowHeight, TRUE);
 		}
+		break;
 	}
 	case WM_COMMAND:
 	{
@@ -547,13 +719,27 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
+void UIManager::ShowTopConsumersToolTip(POINT pos)
+{
+	if (popup != NULL)
+	{
+		return;
+		DestroyWindow(popup);
+		popup = NULL;
+	}
+
+	popup = CreateWindow(szPopupWindowClass, L"POPUP_WINDOW", WS_VISIBLE | WS_POPUP,
+		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
+
+	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
+}
+
 void UIManager::UpdatePosIfRequired()
 {
-	if(!IsOffScreen())
+	if (!IsOffScreen())
 	{
 		return;
 	}
-
 
 	//TODO get the actual max width instead of guessing
 	SetWindowPos(roothWnd, HWND_TOPMOST, 1200, 0, 0, 0, SWP_NOSIZE);
@@ -563,11 +749,11 @@ void UIManager::UpdatePosIfRequired()
 void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
 {
 	int xPos = newRct->left;
-	int yPos = newRct->top;	
-	
+	int yPos = newRct->top;
+
 	int	scaledWidth = newRct->right - newRct->left;
 	int	scaledHeight = newRct->bottom - newRct->top;
-	
+
 	SetWindowPos(hWnd, hWnd, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
@@ -590,7 +776,7 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 
 bool UIManager::IsOffScreen()
 {
-	RECT rc; 
+	RECT rc;
 	GetWindowRect(instance->roothWnd, &rc);
 
 	POINT p;
@@ -613,7 +799,7 @@ void UIManager::UpdateFontScaleForDPI()
 	int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
 	int scaledHeight = MulDiv(configManager->currentFont->lfHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
 
-	if(fontScaleInfo)
+	if (fontScaleInfo)
 	{
 		delete fontScaleInfo;
 	}
@@ -633,7 +819,7 @@ void UIManager::UpdateBmScaleForDPI()
 	int width = MulDiv(instance->downloadIconBm.bmWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
 	int height = MulDiv(instance->downloadIconBm.bmHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
 
-	if(bmScaleInfo)
+	if (bmScaleInfo)
 	{
 		delete bmScaleInfo;
 	}
@@ -661,13 +847,13 @@ INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LP
 		HWND vTxt = GetDlgItem(hDlg, IDC_VER_TXT);
 		if (vTxt != NULL)
 		{
-			SendMessage(vTxt, WM_SETTEXT, 0, (LPARAM) VERSION_NUMBER);
+			SendMessage(vTxt, WM_SETTEXT, 0, (LPARAM)VERSION_NUMBER);
 		}
 
 		return (INT_PTR)TRUE;
 	}
-		
-	
+
+
 
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
@@ -744,7 +930,7 @@ COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)
 	ChooseColor(&colorStruct);
 
 	WORD h, l, s;
-	ColorRGBToHLS(colorStruct.rgbResult , &h, &l, &s);
+	ColorRGBToHLS(colorStruct.rgbResult, &h, &l, &s);
 	COLORREF r = ColorHLSToRGB(h, l, s);
 	//return colorStruct.rgbResult;
 	return r;
@@ -850,7 +1036,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 		{
-			if (LOWORD(wParam) == IDOK) 
+			if (LOWORD(wParam) == IDOK)
 			{
 				ShowWindow(hDlg, SW_HIDE);
 
@@ -868,7 +1054,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 					instance->UpdateFontScaleForDPI();
 				}
 			}
-			
+
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}

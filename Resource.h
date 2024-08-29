@@ -31,6 +31,7 @@
 #define IDC_DOWNLOAD_COL                112
 #define IDC_TEXT                        112
 #define IDC_UPLOAD_COL                  113
+#define IDC_POPUP_NAME                  113
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       133
 #define IDI_LOGO                        133

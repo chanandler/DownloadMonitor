@@ -12,12 +12,54 @@
 #include <windowsx.h>
 #include <tuple>
 
+#include "vector"
+
 #define KILOBYTE 1024.0
+#define MAX_TOP_CONSUMERS 4
+
+class ProcessData
+{
+public:
+	DWORD pid;
+	WCHAR* name;
+	double inBw;
+	double outBw;
+
+	bool skip = false;
+
+	ProcessData(DWORD Pid, WCHAR* Name, double InBw, double OutBw)
+	{
+		pid = Pid;
+		name = _wcsdup(Name);
+		inBw = InBw;
+		outBw = OutBw;
+	}
+
+	~ProcessData()
+	{
+		if(!name)
+		{
+			return;
+		}
+
+		free(name);
+	}
+};
+
+struct PidData
+{
+public:
+	double inBits;
+	double outBits;
+};
 
 class NetworkManager
 {
 public:
 	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
+	INT GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data);
+	INT EnableNetworkTracing(PMIB_TCPROW2 row);
+	std::vector<ProcessData*> GetTopConsumingProcesses();
 	NetworkManager();
 	~NetworkManager();
 private:
