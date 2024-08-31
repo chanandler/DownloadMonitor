@@ -805,7 +805,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	HWND lvHeader = ListView_GetHeader(popup);
 
 	DWORD currentStyle = GetWindowLong(lvHeader, GWL_STYLE);
-	//SetWindowLong(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
+	SetWindowLong(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
 
 	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
 
