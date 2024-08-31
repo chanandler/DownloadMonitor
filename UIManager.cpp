@@ -224,64 +224,31 @@ void UIManager::UpdateInfo()
 
 			if (topCnsmrs.size() > 0)
 			{
-				std::map<DWORD, LVITEM>::iterator it;
-				for (it = instance->itemMap.begin(); it != instance->itemMap.end(); it++)
-				{
-					bool found = false;
-					for (int i = 0; i < topCnsmrs.size(); i++)
-					{
-						if (topCnsmrs[i]->pid == it->first)
-						{
-							found = true;
-							break;
-						}
-					}
+				//Delete old items (I did try saving items and retrieving them but that caused
+				//strange issues, so I'm just being lazy and using LVS_EX_DOUBLEBUFFER on the control to avoid flicker
 
-					if (!found)
-					{
-						//Cull old processes that no longer need to be in list
-						ListView_DeleteItem(instance->popup, it->second.iItem);
-						instance->itemMap.erase(it->first);
-						it = instance->itemMap.begin();
-					}
+				for (int i = 0; i < instance->popupItems.size(); i++)
+				{
+					//Cull old processes that no longer need to be in list
+					ListView_DeleteItem(instance->popup, instance->popupItems[i].iItem);
 				}
 
-				int end = topCnsmrs.size() - MAX_TOP_CONSUMERS;
-
-				if (end < 0)
-				{
-					end = 0;
-				}
-
-				int cIndex = 0;
-				for (int i = topCnsmrs.size() - 1; i >= end; i--)
+				int iIndex = 0;
+				for (int i = topCnsmrs.size() - 1; i >= 0; i--)
 				{
 					LVITEM lvI;
-					bool addToMap = false;
-					if (instance->itemMap.find(topCnsmrs[i]->pid) != instance->itemMap.end())
-					{
-						//Already an item for this PID
-						lvI = instance->itemMap[topCnsmrs[i]->pid];
-					}
-					else if(instance->itemMap.size() >= MAX_TOP_CONSUMERS)
-					{
-						continue;
-					}
-					else
-					{
-						LPWSTR exName = PathFindFileName(topCnsmrs[i]->name);
 
-						if (exName != NULL)
-						{
-							lvI.mask = LVIF_TEXT;
-							lvI.cchTextMax = MAX_PATH;
-							lvI.iItem = cIndex;
-							lvI.iSubItem = 0;
-							lvI.pszText = exName;
+					LPWSTR exName = PathFindFileName(topCnsmrs[i]->name);
 
-							SendMessage(instance->popup, LVM_INSERTITEM, 0, (LPARAM)&lvI);
-							addToMap = true;
-						}
+					if (exName != NULL)
+					{
+						lvI.mask = LVIF_TEXT;
+						lvI.cchTextMax = MAX_PATH;
+						lvI.iItem = iIndex;
+						lvI.iSubItem = 0;
+						lvI.pszText = exName;
+
+						SendMessage(instance->popup, LVM_INSERTITEM, 0, (LPARAM)&lvI);
 					}
 
 					WCHAR* dlStr = instance->GetStringFromBits(topCnsmrs[i]->inBits);
@@ -308,12 +275,8 @@ void UIManager::UpdateInfo()
 						free(ulStr);
 					}
 
-					if (addToMap)
-					{
-						instance->itemMap[topCnsmrs[i]->pid] = lvI;
-					}
-
-					++cIndex;
+					++iIndex;
+					instance->popupItems.push_back(lvI);
 				}
 			}
 
@@ -322,9 +285,9 @@ void UIManager::UpdateInfo()
 				delete topCnsmrs[i];
 			}
 		}
-		else if (instance->itemMap.size() > 0)
+		else if (instance->popupItems.size() > 0)
 		{
-			instance->itemMap.clear();
+			instance->popupItems.clear();
 			netManager->pidMap.clear();
 		}
 
@@ -772,7 +735,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	}
 
 	leftParent = false;
-	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT,
+	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT | LVS_EX_DOUBLEBUFFER,
 		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
 
 	SetWindowSubclass(popup, PopupProc, 0, 0);

@@ -101,7 +101,7 @@ INT NetworkManager::EnableNetworkTracing(PMIB_TCPROW2 row)
 
 std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 {
-	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
+	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
 
 	PMIB_TCPTABLE2 tcpTbl;
 	ULONG ulSize = 0;
@@ -114,7 +114,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 	tcpTbl = (MIB_TCPTABLE2*)malloc(sizeof(MIB_TCPTABLE2));
 	if (!tcpTbl)
 	{
-		return ret;
+		return allCnsmrs;
 	}
 
 	ulSize = sizeof(MIB_TCPTABLE2);
@@ -128,7 +128,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 		tcpTbl = (MIB_TCPTABLE2*)malloc(ulSize);
 		if (!tcpTbl)
 		{
-			return ret;
+			return allCnsmrs;
 		}
 	}
 
@@ -149,7 +149,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 			//Pass into GetPerTcpConectioNEStats
 			//Eiter get bandwidth from that or track recv/sent as with main network tracking
 			//Return top consumers bandwidth + process name
-			
+
 			MIB_TCPROW2 row = tcpTbl->table[i];
 
 			TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
@@ -161,16 +161,16 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 			if (status == NO_ERROR)
 			{
 				status = GetProcessNetworkData(&row, &pData);
-				if (status != NO_ERROR) 
+				if (status != NO_ERROR)
 				{
-					return ret;
+					return allCnsmrs;
 				}
 			}
 			else
 			{
-				return ret;
+				return allCnsmrs;
 			}
-			
+
 			//These are octects, convert to bits
 			double in = pData.DataBytesIn * 8.0;
 			double out = pData.DataBytesOut * 8.0;
@@ -185,7 +185,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 				}
 				MIB_TCPROW2 kRow = tcpTbl->table[j];
 
-				if(kRow.dwOwningPid == row.dwOwningPid)
+				if (kRow.dwOwningPid == row.dwOwningPid)
 				{
 					status = EnableNetworkTracing(&kRow);
 
@@ -194,13 +194,13 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 						TCP_ESTATS_DATA_ROD_v0 kPData = { 0 };
 
 						status = GetProcessNetworkData(&kRow, &kPData);
-						if(status == NO_ERROR)
+						if (status == NO_ERROR)
 						{
 							in += (kPData.DataBytesIn * 8.0);
 							out += (kPData.DataBytesOut * 8.0);
+							ignoredIndexes[j] = true;
 						}
 					}
-					ignoredIndexes[j] = true;
 				}
 			}
 
@@ -221,8 +221,11 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 
 					foundInPrev = true;
 				}
+				else
+				{
+					pidMap.erase(pidMap.find(row.dwOwningPid));
+				}
 			}
-
 
 			PidData newData;
 			newData.inBits = in;
@@ -244,26 +247,48 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 					if (data)
 					{
 						bool added = false;
-						for (int j = 0; j < ret.size(); j++)
+						for (int j = 0; j < allCnsmrs.size(); j++)
 						{
-							if ((finalIn < ret[j]->inBits && finalOut < ret[j]->outBits) && j > 0)
+							if (((finalIn + finalOut) < (allCnsmrs[j]->inBits + allCnsmrs[j]->outBits)) && j > 0)
 							{
-								ret.insert(ret.begin() + j - 1, data);
+								allCnsmrs.insert(allCnsmrs.begin() + j - 1, data);
 								added = true;
 								break;
 							}
 						}
 						if (!added)
 						{
-							ret.push_back(data);
+							allCnsmrs.push_back(data);
 						}
 					}
 				}
+
+				//pidMap.erase(pidMap.find(row.dwOwningPid));
 			}
 		}
 	}
 
 	free(tcpTbl);
+
+	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
+	int end = allCnsmrs.size() - MAX_TOP_CONSUMERS;
+	if (end < 0)
+	{
+		end = 0;
+	}
+
+	//Create vec with correct amount of items
+	for (int i = allCnsmrs.size() - 1; i >= 0; i--)
+	{
+		if(i >= end)
+		{
+			ret.push_back(allCnsmrs[i]);
+		}
+		else
+		{
+			delete allCnsmrs[i];
+		}
+	}
 
 	return ret;
 }

@@ -136,7 +136,7 @@ private:
 	FontScaleInfo* fontScaleInfo;
 
 	static BOOL hasMouseEvent;
-	std::map<DWORD, LVITEM> itemMap;
+	std::vector<LVITEM> popupItems;
 
 	HWND popup;
 
