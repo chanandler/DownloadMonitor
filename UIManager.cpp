@@ -224,6 +224,28 @@ void UIManager::UpdateInfo()
 
 			if (topCnsmrs.size() > 0)
 			{
+				std::map<DWORD, LVITEM>::iterator it;
+				for (it = instance->itemMap.begin(); it != instance->itemMap.end(); it++)
+				{
+					bool found = false;
+					for (int i = 0; i < topCnsmrs.size(); i++)
+					{
+						if (topCnsmrs[i]->pid == it->first)
+						{
+							found = true;
+							break;
+						}
+					}
+
+					if (!found)
+					{
+						//Cull old processes that no longer need to be in list
+						ListView_DeleteItem(instance->popup, it->second.iItem);
+						instance->itemMap.erase(it->first);
+						it = instance->itemMap.begin();
+					}
+				}
+
 				int end = topCnsmrs.size() - MAX_TOP_CONSUMERS;
 
 				if (end < 0)
@@ -240,6 +262,10 @@ void UIManager::UpdateInfo()
 					{
 						//Already an item for this PID
 						lvI = instance->itemMap[topCnsmrs[i]->pid];
+					}
+					else if(instance->itemMap.size() >= MAX_TOP_CONSUMERS)
+					{
+						continue;
 					}
 					else
 					{
@@ -291,34 +317,9 @@ void UIManager::UpdateInfo()
 				}
 			}
 
-			if (topCnsmrs.size() > 0)
+			for (int i = 0; i < topCnsmrs.size(); i++)
 			{
-				std::map<DWORD, LVITEM>::iterator it;
-				for (it = instance->itemMap.begin(); it != instance->itemMap.end(); it++)
-				{
-					bool found = false;
-					for (int i = 0; i < topCnsmrs.size(); i++)
-					{
-						if (topCnsmrs[i]->pid == it->first)
-						{
-							found = true;
-							break;
-						}
-					}
-
-					if (!found)
-					{
-						//Cull old processes that no longer need to be in list
-						ListView_DeleteItem(instance->popup, it->second.iItem);
-						instance->itemMap.erase(it->first);
-						it = instance->itemMap.begin();
-					}
-				}
-
-				for (int i = 0; i < topCnsmrs.size(); i++)
-				{
-					delete topCnsmrs[i];
-				}
+				delete topCnsmrs[i];
 			}
 		}
 		else if (instance->itemMap.size() > 0)
@@ -778,7 +779,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 
 	LVCOLUMN lvc;
 
-	lvc.mask = LVCF_FMT | LVCF_WIDTH| LVCF_TEXT | LVCF_SUBITEM;
+	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
 	int currDPI = GetDpiForWindow(popup);
 
 	SendMessage(roothWnd, CCM_DPISCALE, (WPARAM)TRUE, NULL);

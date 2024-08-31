@@ -17,7 +17,7 @@
 
 #define KILOBYTE 1024.0
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
-#define MAX_TOP_CONSUMERS 4
+#define MAX_TOP_CONSUMERS 6
 
 class ProcessData
 {
