@@ -1,8 +1,12 @@
 ﻿#include "UIManager.h"
 #include "NetworkManager.h"
 #include "ConfigManager.h"
-#include "Commctrl.h"
 #include "shlwapi.h"
+
+//TODO move this into manifest file along with DPI awareness setting
+#pragma comment(linker,"\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
@@ -11,6 +15,10 @@ BOOL UIManager::hasMouseEvent = FALSE;
 
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
+	INITCOMMONCONTROLSEX icex;           // Structure for control initialization.
+	icex.dwICC = ICC_LISTVIEW_CLASSES;
+	InitCommonControlsEx(&icex);
+
 	instance = this;
 	netManager = new NetworkManager();
 
@@ -32,7 +40,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	LoadStringW(hInstance, IDC_POPUP_NAME, szPopupWindowClass, MAX_LOADSTRING);
 	RegisterWindowClass(hInstance);
 	RegisterChildWindowClass(hInstance);
-	RegisterPopupWindowClass(hInstance);
+	//RegisterPopupWindowClass(hInstance);
 	roothWnd = InitInstance(hInstance, nCmdShow);
 
 	// Perform application initialization:
@@ -175,10 +183,9 @@ UIManager::~UIManager()
 	delete configManager;
 }
 
+
 void UIManager::UpdateInfo()
 {
-	WCHAR dlBuf[100];
-	WCHAR ulBuf[100];
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
 	if (!interfaces)
 	{
@@ -193,42 +200,19 @@ void UIManager::UpdateInfo()
 		double dl = std::get<0>(speedInfo);
 		double ul = std::get<1>(speedInfo);
 
-		double dlMbps = dl / DIV_FACTOR;
-		double ulMbps = ul / DIV_FACTOR;
+		WCHAR* dlBuf = instance->GetStringFromBits(dl);
+		WCHAR* ulBuf = instance->GetStringFromBits(ul);
 
-		bool dlKbps = false;
-		bool ulKbps = false;
-
-		//If <1 Mbps, display as Kbps
-		if (dlMbps < 1.0)
+		if (dlBuf)
 		{
-			dl /= KILOBYTE;
-			dlKbps = true;
+			SetWindowText(instance->dlChildWindow, dlBuf);
+			free(dlBuf);
 		}
-		else
+		if (ulBuf)
 		{
-			dl = dlMbps;
+			SetWindowText(instance->ulChildWindow, ulBuf);
+			free(ulBuf);
 		}
-
-		if (ulMbps < 1.0)
-		{
-
-			ul /= KILOBYTE;
-			ulKbps = true;
-		}
-		else
-		{
-			ul = ulMbps;
-		}
-
-		swprintf_s(dlBuf, L"%.1lf %s", dl, dlKbps ? L"kbps" : L"Mbps");
-		swprintf_s(ulBuf, L"%.1lf %s", ul, ulKbps ? L"kbps" : L"Mbps");
-
-		SetWindowText(instance->dlChildWindow, dlBuf);
-		SetWindowText(instance->ulChildWindow, ulBuf);
-
-		memset(dlBuf, 0, 100);
-		memset(ulBuf, 0, 100);
 
 		if (instance->popup != NULL) //Tick the popup if it exists
 		{
@@ -236,6 +220,7 @@ void UIManager::UpdateInfo()
 			memset(pNames, 0, POPUP_BUF_SIZE);
 
 			std::vector<ProcessData*> topCnsmrs = netManager->GetTopConsumingProcesses();
+
 
 			if (topCnsmrs.size() > 0)
 			{
@@ -245,38 +230,134 @@ void UIManager::UpdateInfo()
 				{
 					end = 0;
 				}
-				for (int i = topCnsmrs.size() - 1; i > end; i--)
+
+				int cIndex = 0;
+				for (int i = topCnsmrs.size() - 1; i >= end; i--)
 				{
-					if (topCnsmrs[i]->skip)
+					LVITEM lvI;
+					bool addToMap = false;
+					if (instance->itemMap.find(topCnsmrs[i]->pid) != instance->itemMap.end())
 					{
-						continue;
+						//Already an item for this PID
+						lvI = instance->itemMap[topCnsmrs[i]->pid];
 					}
-					LPWSTR exName = PathFindFileName(topCnsmrs[i]->name);
-					if (exName != NULL)
+					else
 					{
-						wcscat(pNames, exName);
-						WCHAR bDataBuf[200];
-						swprintf_s(bDataBuf, L"	↓	%.1lf	Mbps	↑	%.1lf	Mbps\n", topCnsmrs[i]->inBw / DIV_FACTOR, topCnsmrs[i]->outBw / DIV_FACTOR);
-						wcscat(pNames, bDataBuf);
+						LPWSTR exName = PathFindFileName(topCnsmrs[i]->name);
+
+						if (exName != NULL)
+						{
+							lvI.mask = LVIF_TEXT;
+							lvI.cchTextMax = MAX_PATH;
+							lvI.iItem = cIndex;
+							lvI.iSubItem = 0;
+							lvI.pszText = exName;
+
+							SendMessage(instance->popup, LVM_INSERTITEM, 0, (LPARAM)&lvI);
+							addToMap = true;
+						}
 					}
+
+					WCHAR* dlStr = instance->GetStringFromBits(topCnsmrs[i]->inBits);
+					if (dlStr)
+					{
+						//Download column
+						lvI.iSubItem = 1;
+						lvI.pszText = dlStr;
+						lvI.lParam = (LPARAM)topCnsmrs[i]->inBits;
+
+						SendMessage(instance->popup, LVM_SETITEM, 0, (LPARAM)&lvI);
+						free(dlStr);
+					}
+
+					WCHAR* ulStr = instance->GetStringFromBits(topCnsmrs[i]->outBits);
+					if (ulStr)
+					{
+						//Upload column
+						lvI.iSubItem = 2;
+						lvI.pszText = ulStr;
+						lvI.lParam = (LPARAM)topCnsmrs[i]->outBits;
+
+						SendMessage(instance->popup, LVM_SETITEM, 0, (LPARAM)&lvI);
+						free(ulStr);
+					}
+
+					if (addToMap)
+					{
+						instance->itemMap[topCnsmrs[i]->pid] = lvI;
+					}
+
+					++cIndex;
 				}
 			}
 
-			SetWindowText(instance->popup, pNames);
-
 			if (topCnsmrs.size() > 0)
 			{
+				std::map<DWORD, LVITEM>::iterator it;
+				for (it = instance->itemMap.begin(); it != instance->itemMap.end(); it++)
+				{
+					bool found = false;
+					for (int i = 0; i < topCnsmrs.size(); i++)
+					{
+						if (topCnsmrs[i]->pid == it->first)
+						{
+							found = true;
+							break;
+						}
+					}
+
+					if (!found)
+					{
+						//Cull old processes that no longer need to be in list
+						ListView_DeleteItem(instance->popup, it->second.iItem);
+						instance->itemMap.erase(it->first);
+						it = instance->itemMap.begin();
+					}
+				}
+
 				for (int i = 0; i < topCnsmrs.size(); i++)
 				{
 					delete topCnsmrs[i];
 				}
 			}
 		}
+		else if (instance->itemMap.size() > 0)
+		{
+			instance->itemMap.clear();
+			netManager->pidMap.clear();
+		}
 
 		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
 	}
 
 	free(interfaces);
+}
+
+WCHAR* UIManager::GetStringFromBits(double inBits)
+{
+	double bits = inBits;
+	WCHAR* retBuf = (WCHAR*)malloc(sizeof(WCHAR) * 100);
+
+	double bMbps = bits / DIV_FACTOR;
+	bool kbps = false;
+
+	//If <1 Mbps, display as Kbps
+	if (bMbps < 1.0)
+	{
+		bits /= KILOBYTE;
+		kbps = true;
+	}
+	else
+	{
+		bits = bMbps;
+	}
+
+	if (retBuf)
+	{
+		swprintf_s(retBuf, 99, L"%.1lf %s", bits, kbps ? L"kbps" : L"Mbps");
+	}
+
+	return retBuf;
 }
 
 ATOM UIManager::RegisterWindowClass(HINSTANCE hInstance)
@@ -321,26 +402,26 @@ ATOM UIManager::RegisterChildWindowClass(HINSTANCE hInstance)
 	return RegisterClassEx(&wcex);
 }
 
-ATOM UIManager::RegisterPopupWindowClass(HINSTANCE hInstance)
-{
-	WNDCLASSEXW wcex;
-
-	wcex.cbSize = sizeof(WNDCLASSEX);
-
-	wcex.style = CS_HREDRAW | CS_VREDRAW | WS_EX_CLIENTEDGE;
-	wcex.lpfnWndProc = PopupProc;
-	wcex.cbClsExtra = 0;
-	wcex.cbWndExtra = 0;
-	wcex.hInstance = hInstance;
-	wcex.hIcon = NULL;
-	wcex.hCursor = NULL;
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
-	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
-	wcex.lpszClassName = szPopupWindowClass;
-	wcex.hIconSm = NULL;
-
-	return RegisterClassEx(&wcex);
-}
+//ATOM UIManager::RegisterPopupWindowClass(HINSTANCE hInstance)
+//{
+//	WNDCLASSEXW wcex;
+//
+//	wcex.cbSize = sizeof(WNDCLASSEX);
+//
+//	wcex.style = CS_HREDRAW | CS_VREDRAW | WS_EX_CLIENTEDGE;
+//	wcex.lpfnWndProc = PopupProc;
+//	wcex.cbClsExtra = 0;
+//	wcex.cbWndExtra = 0;
+//	wcex.hInstance = hInstance;
+//	wcex.hIcon = NULL;
+//	wcex.hCursor = NULL;
+//	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
+//	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
+//	wcex.lpszClassName = szPopupWindowClass;
+//	wcex.hIconSm = NULL;
+//
+//	return RegisterClassEx(&wcex);
+//}
 
 HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -523,56 +604,12 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
-LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData)
 {
 	switch (message)
 	{
 	case WM_COMMAND:
 	{
-		break;
-	}
-	case WM_PAINT:
-	{
-		PAINTSTRUCT ps;
-		HDC hdc = BeginPaint(hWnd, &ps);
-
-		HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
-		FillRect(hdc, &ps.rcPaint, brush);
-
-		LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
-		if (modFont && instance->fontScaleInfo)
-		{
-			memcpy(modFont, instance->configManager->currentFont, sizeof(LOGFONT));
-			wcscpy(modFont->lfFaceName, L"calibri"); //Force a font with unicode arrow support for now
-			modFont->lfWidth = instance->fontScaleInfo->width;
-			modFont->lfHeight = instance->fontScaleInfo->height;
-		}
-		else
-		{
-			modFont = instance->configManager->currentFont;
-		}
-
-		HFONT txtFont = CreateFontIndirect(modFont);
-
-		SelectObject(hdc, txtFont);
-		DrawText(hdc, instance->puBuf, -1, &ps.rcPaint, DT_CENTER | DT_NOCLIP);
-
-		EndPaint(hWnd, &ps);
-
-		break;
-	}
-	case WM_SETTEXT:
-	{
-		//Intercept this message and handle it ourselves
-		LPWSTR msg = (LPWSTR)lParam;
-
-		ZeroMemory(instance->puBuf, 200);
-		wcscpy(instance->puBuf, msg);
-
-		RECT rc;
-		GetClientRect(hWnd, &rc);
-		//Force a repaint (Will call WM_PAINT)
-		InvalidateRect(hWnd, &rc, FALSE);
 		break;
 	}
 	case WM_MOUSEMOVE:
@@ -588,12 +625,12 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	case WM_MOUSELEAVE:
 	{
 		//Destroy this popup when we leave it
-		DestroyWindow(hWnd);
+		DestroyWindow(instance->popup);
 		instance->popup = NULL;
 		break;
 	}
 	}
-	return DefWindowProc(hWnd, message, wParam, lParam);
+	return DefSubclassProc(hWnd, message, wParam, lParam);
 }
 
 LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -719,6 +756,11 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
+INT_PTR UIManager::PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort)
+{
+	return (double)val1 > (double)val2;
+}
+
 void UIManager::ShowTopConsumersToolTip(POINT pos)
 {
 	if (popup != NULL)
@@ -728,8 +770,44 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 		popup = NULL;
 	}
 
-	popup = CreateWindow(szPopupWindowClass, L"POPUP_WINDOW", WS_VISIBLE | WS_POPUP,
+	leftParent = false;
+	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT,
 		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
+
+	SetWindowSubclass(popup, PopupProc, 0, 0);
+
+	LVCOLUMN lvc;
+
+	lvc.mask = LVCF_FMT | LVCF_WIDTH| LVCF_TEXT | LVCF_SUBITEM;
+	int currDPI = GetDpiForWindow(popup);
+
+	SendMessage(roothWnd, CCM_DPISCALE, (WPARAM)TRUE, NULL);
+
+	//Init collumns
+	//NAME	DOWNLOAD	UPLOAD
+	WCHAR cText[256];
+	for (int i = 0; i < 3; i++)
+	{
+		lvc.iSubItem = i;
+		lvc.pszText = cText;
+		lvc.cx = MulDiv(POPUP_INITIAL_WIDTH / 3, currDPI, USER_DEFAULT_SCREEN_DPI);
+		lvc.fmt = LVCFMT_FIXED_WIDTH;
+
+
+		LoadString(hInst,
+			IDS_FIRST_COLUMN + i,
+			cText,
+			sizeof(cText) / sizeof(cText[0]));
+
+		ListView_InsertColumn(popup, i, &lvc);
+	}
+
+	HWND lvHeader = ListView_GetHeader(popup);
+
+	DWORD currentStyle = GetWindowLong(lvHeader, GWL_STYLE);
+	//SetWindowLong(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
+
+	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
 
 	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
 }

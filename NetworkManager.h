@@ -13,26 +13,28 @@
 #include <tuple>
 
 #include "vector"
+#include <map>
 
 #define KILOBYTE 1024.0
-#define MAX_TOP_CONSUMERS 10
+#define DIV_FACTOR (KILOBYTE * KILOBYTE)
+#define MAX_TOP_CONSUMERS 4
 
 class ProcessData
 {
 public:
 	DWORD pid;
 	WCHAR* name;
-	double inBw;
-	double outBw;
+	double inBits;
+	double outBits;
 
 	bool skip = false;
 
-	ProcessData(DWORD Pid, WCHAR* Name, double InBw, double OutBw)
+	ProcessData(DWORD Pid, WCHAR* Name, double InBits, double OutBits)
 	{
 		pid = Pid;
 		name = _wcsdup(Name);
-		inBw = InBw;
-		outBw = OutBw;
+		inBits = InBits;
+		outBits = OutBits;
 	}
 
 	~ProcessData()
@@ -60,6 +62,7 @@ public:
 	INT GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data);
 	INT EnableNetworkTracing(PMIB_TCPROW2 row);
 	std::vector<ProcessData*> GetTopConsumingProcesses();
+	std::map<DWORD, PidData> pidMap;
 	NetworkManager();
 	~NetworkManager();
 private:

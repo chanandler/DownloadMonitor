@@ -17,10 +17,12 @@
 #include <tuple>
 
 #include "vector"
+#include "Commctrl.h"
+#include <map>
+
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
-#define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define ONE_SECOND 1000000
 
 #define EXIT 1
@@ -49,7 +51,7 @@
 #define CHILD_INITIAL_HEIGHT 20
 
 #define POPUP_BUF_SIZE 1000
-#define POPUP_INITIAL_WIDTH 500
+#define POPUP_INITIAL_WIDTH 430
 #define POPUP_INITIAL_HEIGHT 150
 
 class BitmapScaleInfo
@@ -104,6 +106,8 @@ private:
 	COLORREF COLORREFToRGB(COLORREF Col);
 
 	bool running = false;
+	BOOL leftParent = false;
+
 
 	HWND roothWnd;
 
@@ -132,8 +136,11 @@ private:
 	FontScaleInfo* fontScaleInfo;
 
 	static BOOL hasMouseEvent;
+	std::map<DWORD, LVITEM> itemMap;
 
 	HWND popup;
+
+	WCHAR* GetStringFromBits(double inBits);
 
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
@@ -153,13 +160,14 @@ private:
 	void UpdateBmScaleForDPI();
 	void WriteWindowPos();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
-	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);
 	static INT_PTR OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort);
 	void ForceRepaint();
 	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };

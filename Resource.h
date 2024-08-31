@@ -32,6 +32,9 @@
 #define IDC_TEXT                        112
 #define IDC_UPLOAD_COL                  113
 #define IDC_POPUP_NAME                  113
+#define IDS_FIRST_COLUMN                114
+#define IDS_SECOND_COLUMN               115
+#define IDS_THIRD_COLUMN                116
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       133
 #define IDI_LOGO                        133

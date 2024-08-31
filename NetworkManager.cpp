@@ -1,5 +1,4 @@
 #include "NetworkManager.h"
-#include <map>
 
 NetworkManager::NetworkManager()
 {
@@ -100,8 +99,6 @@ INT NetworkManager::EnableNetworkTracing(PMIB_TCPROW2 row)
 	return SetPerTcpConnectionEStats((PMIB_TCPROW)row, TcpConnectionEstatsData, (PUCHAR)&settings, 0, sizeof(TCP_ESTATS_DATA_RW_v0), 0);
 }
 
-std::map<DWORD, PidData> pidMap;
-
 std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 {
 	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
@@ -122,6 +119,8 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 
 	ulSize = sizeof(MIB_TCPTABLE2);
 
+	std::map<int, bool> ignoredIndexes = std::map<int, bool>();
+
 	//Initial call to get tbl size, then allocate
 	if (GetTcpTable2(tcpTbl, &ulSize, TRUE) == ERROR_INSUFFICIENT_BUFFER)
 	{
@@ -139,22 +138,18 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 		for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
 		{
 			if (tcpTbl->table[i].dwState != MIB_TCP_STATE_ESTAB ||
-				tcpTbl->table[i].dwState == MIB_TCP_STATE_CLOSED)
+				tcpTbl->table[i].dwState == MIB_TCP_STATE_CLOSED
+				|| ignoredIndexes[i] == true)
 			{
 				continue;
 			}
 
-			/*TCP_ESTATS_BANDWIDTH_RW_v0 bwSettings;
-			bwSettings.EnableCollectionInbound = TcpBoolOptEnabled;
-			bwSettings.EnableCollectionOutbound = TcpBoolOptEnabled;
-			TCP_ESTATS_BANDWIDTH_ROD_v0 bwData;
-			*/
 			//Get PID
 			//Get TCP row
 			//Pass into GetPerTcpConectioNEStats
 			//Eiter get bandwidth from that or track recv/sent as with main network tracking
 			//Return top consumers bandwidth + process name
-
+			
 			MIB_TCPROW2 row = tcpTbl->table[i];
 
 			TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
@@ -180,6 +175,35 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 			double in = pData.DataBytesIn * 8.0;
 			double out = pData.DataBytesOut * 8.0;
 
+			//Check for any other occurances of this PID (Programs can have multiple processes under the same PID)
+			for (int j = i + 1; j < (int)tcpTbl->dwNumEntries; j++)
+			{
+				if (tcpTbl->table[j].dwState != MIB_TCP_STATE_ESTAB ||
+					tcpTbl->table[j].dwState == MIB_TCP_STATE_CLOSED)
+				{
+					continue;
+				}
+				MIB_TCPROW2 kRow = tcpTbl->table[j];
+
+				if(kRow.dwOwningPid == row.dwOwningPid)
+				{
+					status = EnableNetworkTracing(&kRow);
+
+					if (status == NO_ERROR)
+					{
+						TCP_ESTATS_DATA_ROD_v0 kPData = { 0 };
+
+						status = GetProcessNetworkData(&kRow, &kPData);
+						if(status == NO_ERROR)
+						{
+							in += (kPData.DataBytesIn * 8.0);
+							out += (kPData.DataBytesOut * 8.0);
+						}
+					}
+					ignoredIndexes[j] = true;
+				}
+			}
+
 			double finalIn = 0.0;
 			double finalOut = 0.0;
 
@@ -190,8 +214,8 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 				double prevIn = pidMap[row.dwOwningPid].inBits;
 				double prevOut = pidMap[row.dwOwningPid].outBits;
 
-				if(in >= prevIn && out >= prevOut)
-				{	
+				if (in >= prevIn && out >= prevOut)
+				{
 					finalIn = in - prevIn;
 					finalOut = out - prevOut;
 
@@ -199,13 +223,14 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 				}
 			}
 
+
 			PidData newData;
 			newData.inBits = in;
 			newData.outBits = out;
 
 			pidMap[row.dwOwningPid] = newData;
 
-			if (foundInPrev && (finalIn != 0.0 || finalOut != 0.0) )
+			if (foundInPrev && (finalIn != 0.0 || finalOut != 0.0))
 			{
 				HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, row.dwOwningPid);
 				if (handle)
@@ -221,7 +246,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 						bool added = false;
 						for (int j = 0; j < ret.size(); j++)
 						{
-							if ((finalIn < ret[j]->inBw && finalOut < ret[j]->outBw) && j > 0)
+							if ((finalIn < ret[j]->inBits && finalOut < ret[j]->outBits) && j > 0)
 							{
 								ret.insert(ret.begin() + j - 1, data);
 								added = true;
