@@ -17,7 +17,7 @@
 
 #define KILOBYTE 1024.0
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
-#define MAX_TOP_CONSUMERS 5
+#define MAX_TOP_CONSUMERS 4
 
 class ProcessData
 {
@@ -61,6 +61,7 @@ public:
 	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
 	INT GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data);
 	INT EnableNetworkTracing(PMIB_TCPROW2 row);
+	bool HasElevatedPrivileges();
 	std::vector<ProcessData*> GetTopConsumingProcesses();
 	std::map<DWORD, PidData> pidMap;
 	NetworkManager();
@@ -68,6 +69,8 @@ public:
 private:
 	double lastDlCount = -1.0;
 	double lastUlCount = -1.0;
+
+	PMIB_TCPTABLE2 GetAllocatedTcpTable();
 
 	UCHAR currentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
 	//int cacheIndex = -1;

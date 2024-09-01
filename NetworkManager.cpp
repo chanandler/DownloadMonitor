@@ -99,27 +99,39 @@ INT NetworkManager::EnableNetworkTracing(PMIB_TCPROW2 row)
 	return SetPerTcpConnectionEStats((PMIB_TCPROW)row, TcpConnectionEstatsData, (PUCHAR)&settings, 0, sizeof(TCP_ESTATS_DATA_RW_v0), 0);
 }
 
-std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
+//Attempt setting connection EStat to see if we have the required privileges
+bool NetworkManager::HasElevatedPrivileges()
 {
-	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
+	TCP_ESTATS_DATA_RW_v0 settings;
+	settings.EnableCollection = TcpBoolOptEnabled;
 
+	PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
+	for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
+	{
+		if (tcpTbl->table[i].dwState != MIB_TCP_STATE_ESTAB)
+		{
+			continue;
+		}
+
+		return SetPerTcpConnectionEStats((PMIB_TCPROW)&tcpTbl->table[i], TcpConnectionEstatsData, (PUCHAR)&settings, 0, sizeof(TCP_ESTATS_DATA_RW_v0), 0)
+			!= ERROR_ACCESS_DENIED;
+	}
+	
+	return false;
+}
+
+PMIB_TCPTABLE2 NetworkManager::GetAllocatedTcpTable()
+{
 	PMIB_TCPTABLE2 tcpTbl;
 	ULONG ulSize = 0;
-
-	char localAddr[128];
-	char remoteAddr[128];
-
-	struct in_addr IpAddr;
 
 	tcpTbl = (MIB_TCPTABLE2*)malloc(sizeof(MIB_TCPTABLE2));
 	if (!tcpTbl)
 	{
-		return allCnsmrs;
+		return nullptr;
 	}
 
 	ulSize = sizeof(MIB_TCPTABLE2);
-
-	std::map<int, bool> ignoredIndexes = std::map<int, bool>();
 
 	//Initial call to get tbl size, then allocate
 	if (GetTcpTable2(tcpTbl, &ulSize, TRUE) == ERROR_INSUFFICIENT_BUFFER)
@@ -128,12 +140,25 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 		tcpTbl = (MIB_TCPTABLE2*)malloc(ulSize);
 		if (!tcpTbl)
 		{
-			return allCnsmrs;
+			return nullptr;
 		}
 	}
 
 	//Get actual data
-	if (GetTcpTable2(tcpTbl, &ulSize, TRUE) == NO_ERROR)
+	GetTcpTable2(tcpTbl, &ulSize, TRUE);
+	return tcpTbl;
+}
+
+std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
+{
+	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
+
+	std::map<int, bool> ignoredIndexes = std::map<int, bool>();
+
+	PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
+
+	//Get actual data
+	if (tcpTbl)
 	{
 		for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
 		{
@@ -262,13 +287,11 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 						}
 					}
 				}
-
-				//pidMap.erase(pidMap.find(row.dwOwningPid));
 			}
 		}
-	}
 
-	free(tcpTbl);
+		free(tcpTbl);
+	}
 
 	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
 	int end = allCnsmrs.size() - MAX_TOP_CONSUMERS;

@@ -233,8 +233,7 @@ void UIManager::UpdateInfo()
 					ListView_DeleteItem(instance->popup, instance->popupItems[i].iItem);
 				}
 
-				int iIndex = 0;
-				for (int i = topCnsmrs.size() - 1; i >= 0; i--)
+				for (int i = 0; i < topCnsmrs.size(); i++)
 				{
 					LVITEM lvI;
 
@@ -244,7 +243,7 @@ void UIManager::UpdateInfo()
 					{
 						lvI.mask = LVIF_TEXT;
 						lvI.cchTextMax = MAX_PATH;
-						lvI.iItem = iIndex;
+						lvI.iItem = i;
 						lvI.iSubItem = 0;
 						lvI.pszText = exName;
 
@@ -275,7 +274,6 @@ void UIManager::UpdateInfo()
 						free(ulStr);
 					}
 
-					++iIndex;
 					instance->popupItems.push_back(lvI);
 				}
 			}
@@ -365,27 +363,6 @@ ATOM UIManager::RegisterChildWindowClass(HINSTANCE hInstance)
 
 	return RegisterClassEx(&wcex);
 }
-
-//ATOM UIManager::RegisterPopupWindowClass(HINSTANCE hInstance)
-//{
-//	WNDCLASSEXW wcex;
-//
-//	wcex.cbSize = sizeof(WNDCLASSEX);
-//
-//	wcex.style = CS_HREDRAW | CS_VREDRAW | WS_EX_CLIENTEDGE;
-//	wcex.lpfnWndProc = PopupProc;
-//	wcex.cbClsExtra = 0;
-//	wcex.cbWndExtra = 0;
-//	wcex.hInstance = hInstance;
-//	wcex.hIcon = NULL;
-//	wcex.hCursor = NULL;
-//	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW);
-//	wcex.lpszMenuName = L"";//MAKEINTRESOURCEW(IDC_NAME);
-//	wcex.lpszClassName = szPopupWindowClass;
-//	wcex.hIconSm = NULL;
-//
-//	return RegisterClassEx(&wcex);
-//}
 
 HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
@@ -478,9 +455,17 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		POINT p;
 		p.x = GET_X_LPARAM(lParam);
 		p.y = GET_Y_LPARAM(lParam);
-		ClientToScreen(instance->roothWnd, &p);
+		ClientToScreen(hWnd, &p);
 
-		instance->ShowTopConsumersToolTip(p);
+		if(instance->netManager->HasElevatedPrivileges())
+		{
+			instance->ShowTopConsumersToolTip(p);
+		}
+		else
+		{
+			instance->ShowNoPrivilegesTooptip(p);
+		}
+
 		break;
 	}
 	case WM_MOUSELEAVE:
@@ -588,6 +573,12 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	}
 	case WM_MOUSELEAVE:
 	{
+		if(uIdSubclass == 1)
+		{
+			DestroyWindow(hWnd);
+			break;
+		}
+
 		//Destroy this popup when we leave it
 		DestroyWindow(instance->popup);
 		instance->popup = NULL;
@@ -734,7 +725,6 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 		popup = NULL;
 	}
 
-	leftParent = false;
 	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT | LVS_EX_DOUBLEBUFFER,
 		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
 
@@ -774,6 +764,45 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
 
 	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
+}
+
+void UIManager::ShowNoPrivilegesTooptip(POINT pos)
+{
+	HWND errPopup = CreateWindow(WC_EDIT, L"", WS_VISIBLE | WS_POPUP | ES_CENTER | ES_READONLY | WS_BORDER,
+		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
+
+	if(errPopup == NULL)
+	{
+		return;
+	}
+
+	LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+	if (modFont && fontScaleInfo)
+	{
+		memcpy(modFont, configManager->currentFont, sizeof(LOGFONT));
+
+		modFont->lfWidth = fontScaleInfo->width;
+		modFont->lfHeight = fontScaleInfo->height;
+	}
+	else
+	{
+		modFont = configManager->currentFont;
+	}
+
+	HFONT txtFont = CreateFontIndirect(modFont);
+
+	SendMessage(errPopup, WM_SETFONT, (WPARAM)txtFont, NULL);
+
+	free(modFont);
+	SetWindowText(errPopup, L"Process logging requires elevated privileges");
+	SetWindowSubclass(errPopup, PopupProc, 1, 0);
+
+	//For some reason MOUSEMOVE messages aren't being recieved by a static control,
+	//so we use an edit and disable all the edit-y bits here
+	HideCaret(errPopup);
+	SetClassLongPtr(errPopup, GCLP_HCURSOR, (LONG_PTR)LoadCursor(nullptr, IDC_ARROW));
+
+	InitForDPI(errPopup, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
 }
 
 void UIManager::UpdatePosIfRequired()
