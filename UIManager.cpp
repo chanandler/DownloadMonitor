@@ -96,7 +96,7 @@ void UIManager::UpdateBitmapColours()
 	//Load in a bitmap with transparent areas set to black, and fillable areas set to white
 	//Retrieve each pixel/bit in the map, using GetDIBits
 	//Loop through each pixel and if it is equal to white, save the index as that check will fail subsequent times due to the colour being changed to the user's preference
-	//Set all saved indexes to the required colour, and write this new data to the bitmap
+	//Set all saved indexes to the required colour, ankldd write this new data to the bitmap
 	//
 	//In ChildProc(), we draw the bitmaps via TransparentBlt, which allows us to pass in the colour used for transparency (in our case black)
 	//Whenever a colour change is required, we run through again and apply the new colour to the cached indexes
@@ -452,6 +452,10 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	}
 	case WM_MOUSEHOVER:
 	{
+		if (GetCapture() == instance->roothWnd)  //Check if this window has mouse input
+		{
+			break;
+		}
 		POINT p;
 		p.x = GET_X_LPARAM(lParam);
 		p.y = GET_Y_LPARAM(lParam);
