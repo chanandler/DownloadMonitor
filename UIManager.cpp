@@ -96,7 +96,7 @@ void UIManager::UpdateBitmapColours()
 	//Load in a bitmap with transparent areas set to black, and fillable areas set to white
 	//Retrieve each pixel/bit in the map, using GetDIBits
 	//Loop through each pixel and if it is equal to white, save the index as that check will fail subsequent times due to the colour being changed to the user's preference
-	//Set all saved indexes to the required colour, ankldd write this new data to the bitmap
+	//Set all saved indexes to the required colour, and write this new data to the bitmap
 	//
 	//In ChildProc(), we draw the bitmaps via TransparentBlt, which allows us to pass in the colour used for transparency (in our case black)
 	//Whenever a colour change is required, we run through again and apply the new colour to the cached indexes
@@ -183,7 +183,6 @@ UIManager::~UIManager()
 	delete configManager;
 }
 
-
 void UIManager::UpdateInfo()
 {
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
@@ -221,7 +220,7 @@ void UIManager::UpdateInfo()
 
 			std::vector<ProcessData*> topCnsmrs = netManager->GetTopConsumingProcesses();
 
-			//Go through 0 -> max and re-use items that exist, or delete items that are if there are now more items than processes to display
+			//Go through 0 -> max and re-use items that exist, or delete items that beyond the current vector size
 			for(int i = 0; i < MAX_TOP_CONSUMERS; i++)
 			{
 				LVITEM lvI = { 0 };
