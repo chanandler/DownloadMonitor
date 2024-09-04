@@ -137,7 +137,6 @@ private:
 	FontScaleInfo* fontScaleInfo;
 
 	static BOOL hasMouseEvent;
-	std::vector<LVITEM> popupItems;
 
 	HWND popup;
 
@@ -147,7 +146,6 @@ private:
 	static void UpdateInfo();
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
-	ATOM RegisterPopupWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void UpdateOpacity(HWND hWnd);
 	void OnSelectItem(int sel);

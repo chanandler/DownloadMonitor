@@ -221,34 +221,45 @@ void UIManager::UpdateInfo()
 
 			std::vector<ProcessData*> topCnsmrs = netManager->GetTopConsumingProcesses();
 
-
-			if (topCnsmrs.size() > 0)
+			//Go through 0 -> max and re-use items that exist, or delete items that are if there are now more items than processes to display
+			for(int i = 0; i < MAX_TOP_CONSUMERS; i++)
 			{
-				//Delete old items (I did try saving items and retrieving them but that caused
-				//strange issues, so I'm just being lazy and using LVS_EX_DOUBLEBUFFER on the control to avoid flicker
+				LVITEM lvI = { 0 };
+				lvI.iItem = i;
+				lvI.iSubItem = 0;
 
-				for (int i = 0; i < instance->popupItems.size(); i++)
+				//See if we have an item at this index
+				BOOL existingItem = ListView_GetItem(instance->popup, &lvI);
+
+				if(existingItem == TRUE && i >= topCnsmrs.size() - 1) //Delete ones beyond the size of the process list
 				{
-					//Cull old processes that no longer need to be in list
-					ListView_DeleteItem(instance->popup, instance->popupItems[i].iItem);
+					ListView_DeleteItem(instance->popup, lvI.iItem);
 				}
-
-				for (int i = 0; i < topCnsmrs.size(); i++)
+				else if(topCnsmrs.size() > 0 && i < topCnsmrs.size() - 1)
 				{
-					LVITEM lvI;
+					ProcessData* pData = topCnsmrs[i];
+					LPWSTR exeName = PathFindFileName(topCnsmrs[i]->name);
 
-					LPWSTR exName = PathFindFileName(topCnsmrs[i]->name);
-
-					if (exName != NULL)
+					if (exeName != NULL)
 					{
-						lvI.mask = LVIF_TEXT;
+						lvI.mask = LVIF_TEXT | LVIF_PARAM;
 						lvI.cchTextMax = MAX_PATH;
 						lvI.iItem = i;
 						lvI.iSubItem = 0;
-						lvI.pszText = exName;
+						lvI.pszText = exeName;
+						lvI.lParam = (LPARAM)(double)(topCnsmrs[i]->inBits + topCnsmrs[i]->outBits);
+					}
 
+					if (existingItem == FALSE)
+					{
 						SendMessage(instance->popup, LVM_INSERTITEM, 0, (LPARAM)&lvI);
 					}
+					else
+					{
+						SendMessage(instance->popup, LVM_SETITEM, 0, (LPARAM)&lvI);
+					}
+
+					lvI.mask = LVIF_TEXT;
 
 					WCHAR* dlStr = instance->GetStringFromBits(topCnsmrs[i]->inBits);
 					if (dlStr)
@@ -256,8 +267,6 @@ void UIManager::UpdateInfo()
 						//Download column
 						lvI.iSubItem = 1;
 						lvI.pszText = dlStr;
-						lvI.lParam = (LPARAM)topCnsmrs[i]->inBits;
-
 						SendMessage(instance->popup, LVM_SETITEM, 0, (LPARAM)&lvI);
 						free(dlStr);
 					}
@@ -268,25 +277,19 @@ void UIManager::UpdateInfo()
 						//Upload column
 						lvI.iSubItem = 2;
 						lvI.pszText = ulStr;
-						lvI.lParam = (LPARAM)topCnsmrs[i]->outBits;
-
 						SendMessage(instance->popup, LVM_SETITEM, 0, (LPARAM)&lvI);
 						free(ulStr);
 					}
-
-					instance->popupItems.push_back(lvI);
 				}
 			}
+
+			//Use our comparison func to sort in descending order
+			ListView_SortItems(instance->popup, instance->PopupCompare, 0);
 
 			for (int i = 0; i < topCnsmrs.size(); i++)
 			{
 				delete topCnsmrs[i];
 			}
-		}
-		else if (instance->popupItems.size() > 0)
-		{
-			instance->popupItems.clear();
-			netManager->pidMap.clear();
 		}
 
 		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
@@ -461,7 +464,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		p.y = GET_Y_LPARAM(lParam);
 		ClientToScreen(hWnd, &p);
 
-		if(instance->netManager->HasElevatedPrivileges())
+		if (instance->netManager->HasElevatedPrivileges())
 		{
 			instance->ShowTopConsumersToolTip(p);
 		}
@@ -577,12 +580,28 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	}
 	case WM_MOUSELEAVE:
 	{
-		if(uIdSubclass == 1)
+		if (uIdSubclass == 1) //For the elevated priv popup
 		{
 			DestroyWindow(hWnd);
 			break;
 		}
 
+		for (int i = 0; i < MAX_TOP_CONSUMERS; i++) //Delete all old items
+		{
+			LVITEM lvI = { 0 };
+			lvI.iItem = i;
+			lvI.iSubItem = 0;
+			
+			BOOL existingItem = ListView_GetItem(instance->popup, &lvI);
+
+			if (existingItem == TRUE) //Delete ones beyond the size of the process list
+			{
+				ListView_DeleteItem(instance->popup, lvI.iItem);
+			}
+		}
+	
+		netManager->pidMap.clear();
+		
 		//Destroy this popup when we leave it
 		DestroyWindow(instance->popup);
 		instance->popup = NULL;
@@ -717,7 +736,16 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 INT_PTR UIManager::PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort)
 {
-	return (double)val1 > (double)val2;
+	if((double)val1 > (double)val2)
+	{
+		return -1;
+	}
+	else if((double)val1 == (double)val2)
+	{
+		return 0;
+	}
+
+	return 1;
 }
 
 void UIManager::ShowTopConsumersToolTip(POINT pos)
@@ -729,7 +757,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 		popup = NULL;
 	}
 
-	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT | LVS_EX_DOUBLEBUFFER,
+	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT,
 		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
 
 	SetWindowSubclass(popup, PopupProc, 0, 0);
@@ -742,7 +770,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	SendMessage(roothWnd, CCM_DPISCALE, (WPARAM)TRUE, NULL);
 
 	//Init collumns
-	//NAME	DOWNLOAD	UPLOAD
+	//NAME	 DOWNLOAD	UPLOAD
 	WCHAR cText[256];
 	for (int i = 0; i < 3; i++)
 	{
@@ -775,7 +803,7 @@ void UIManager::ShowNoPrivilegesTooptip(POINT pos)
 	HWND errPopup = CreateWindow(WC_EDIT, L"", WS_VISIBLE | WS_POPUP | ES_CENTER | ES_READONLY | WS_BORDER,
 		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
 
-	if(errPopup == NULL)
+	if (errPopup == NULL)
 	{
 		return;
 	}
