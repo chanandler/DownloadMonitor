@@ -13,6 +13,7 @@
 #define FONT "FONT"
 #define UPLOAD_TXT_COLOUR "UPLOAD_TXT_COLOUR"
 #define DOWNLOAD_TXT_COLOUR "DOWNLOAD_TXT_COLOUR"
+#define SELECTED_ADAPTER "SELECTED_ADAPTER"
 
 enum FONT_ENUM
 {
@@ -50,6 +51,7 @@ private:
 	void WriteData();
 	char* WideToAnsi(LPWSTR inStr);
 	int ProcessInt(char* dataStart);
+	char* ProcessChar(char* dataStart);
 	LOGFONT ProcessFont(char* dataStart);
 	std::tuple<int, int> ProcessCoords(char* dataStart);
 	COLORREF ProcessRGB(char* dataStart);
@@ -60,11 +62,15 @@ private:
 public:
 	int lastX, lastY;
 	int opacity;
+	
+	UCHAR* uniqueAddr;
+
 	void ResetConfig();
 	bool ReadData();
 
 	ConfigManager(LPWSTR configDirOverride);
 	~ConfigManager();
+	void UpdateSelectedAdapter(UCHAR* selAdapterPhysAddr);
 	void UpdateForegroundColour(COLORREF fg_col);
 	void UpdateChildColour(COLORREF ch_col);
 

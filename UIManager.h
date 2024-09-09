@@ -140,6 +140,8 @@ private:
 
 	HWND popup;
 
+	std::vector<MIB_IF_ROW2> foundAdapters;
+
 	WCHAR* GetStringFromBits(double inBits);
 
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
@@ -159,6 +161,7 @@ private:
 	void UpdateBmScaleForDPI();
 	void WriteWindowPos();
 	void ShowNoPrivilegesTooptip(POINT pos);
+	void UpdateSelectedAdapter(HWND dropDown);
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);

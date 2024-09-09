@@ -4,7 +4,7 @@
 #include <string>
 #include <tchar.h>
 
-const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\nUPLOAD_TXT_COLOUR=0,215,54\nDOWNLOAD_TXT_COLOUR = 255, 0, 0";
+const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\nUPLOAD_TXT_COLOUR=0,215,54\nDOWNLOAD_TXT_COLOUR=255,0,0\nSELECTED_ADAPTER=AUTO";
 
 ConfigManager::ConfigManager(LPWSTR configDirOverride)
 {
@@ -17,6 +17,7 @@ ConfigManager::ConfigManager(LPWSTR configDirOverride)
 	childColour = (COLORREF*)malloc(sizeof(COLORREF));
 	uploadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
 	downloadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
+	uniqueAddr = (UCHAR*)malloc(sizeof(UCHAR) * 32);
 
 	if (configDirOverride)
 	{
@@ -40,10 +41,20 @@ ConfigManager::~ConfigManager()
 	free(currentFont);
 	free(uploadTxtColour);
 	free(downloadTxtColour);
+	free(uniqueAddr);
 	if (configDir)
 	{
 		free(configDir);
 	}
+}
+
+void ConfigManager::UpdateSelectedAdapter(UCHAR* selAdapterPhysAddr)
+{
+	int end = 32;
+	memcpy(uniqueAddr, selAdapterPhysAddr, end);
+	uniqueAddr[end] = 0;
+
+	WriteData();
 }
 
 void ConfigManager::UpdateForegroundColour(COLORREF fg_col)
@@ -141,12 +152,16 @@ void ConfigManager::WriteData()
 	sprintf_s(dl_txt_Buf, "%s=%i,%i,%i", DOWNLOAD_TXT_COLOUR, GetRValue(*downloadTxtColour), GetGValue(*downloadTxtColour),
 		GetBValue(*downloadTxtColour));
 
+	char adapter_buf[200];
+	sprintf_s(adapter_buf, "%s=%s", SELECTED_ADAPTER, uniqueAddr);
+
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 	std::ofstream configFile(pathBuf);
 
 	// Write to the file
-	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n";
+	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n"
+		<< adapter_buf << "\n";
 
 	configFile.close();
 }
@@ -280,6 +295,24 @@ bool ConfigManager::ReadData()
 			*downloadTxtColour = val;
 			++readCount;
 		}
+		else if (!strncmp(output.c_str(), SELECTED_ADAPTER, 16))
+		{
+			char* uID = ProcessChar(dataStart);
+			if(!uID)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			int end = strlen(uID);
+			memcpy(uniqueAddr, uID, end);
+			uniqueAddr[end] = 0;
+			//*uniqueAddr = (UCHAR)*uID;
+
+			free(uID);
+
+			++readCount;
+		}
 	}
 
 	configFile.close();
@@ -317,6 +350,28 @@ int ConfigManager::ProcessInt(char* dataStart)
 	CopyRange(dataStart, dataEnd, buf, 20);
 
 	return atoi(buf);
+}
+
+//PURPOSE: Read char value from config file
+char* ConfigManager::ProcessChar(char* dataStart)
+{
+	++dataStart;
+	char* dataEnd = &dataStart[strlen(dataStart)];
+
+	if (!dataEnd)
+	{
+		return nullptr;
+	}
+
+	char* buf = (char*)malloc(sizeof(char) * 32);
+	if (!buf)
+	{
+		return nullptr;
+	}
+
+	CopyRange(dataStart, dataEnd, buf, 32);
+
+	return buf;
 }
 
 //PURPOSE: Read comma seperated font parameters and construct into LOGFONT

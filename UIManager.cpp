@@ -194,7 +194,7 @@ void UIManager::UpdateInfo()
 
 	while (instance->running)
 	{
-		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces);
+		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces, instance->configManager->uniqueAddr);
 
 		double dl = std::get<0>(speedInfo);
 		double ul = std::get<1>(speedInfo);
@@ -974,11 +974,63 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	switch (message)
 	{
 	case WM_INITDIALOG:
+	{
+		HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
+
+		if(!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
+		{
+			Button_SetCheck(chkBtn, TRUE);
+		}
+		else 
+		{
+			Button_SetCheck(chkBtn, FALSE);
+		}
+		//Init the adapter selection dropdown
+		BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
+		HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+		if(dropDown != NULL)
+		{
+			ComboBox_Enable(dropDown, !autoMode);
+
+			instance->foundAdapters = netManager->GetAllAdapters();
+
+			int sel = -1;
+			for (int i = 0; i < instance->foundAdapters.size(); i++)
+			{
+				SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
+
+				if(!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+				{
+					sel = i;
+				}
+			}
+		
+			if(sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
+			{
+				char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
+				strcpy(buf, "AUTO");
+				instance->configManager->UpdateSelectedAdapter((UCHAR*)&buf);
+
+				SendMessage(hDlg, message, wParam, lParam);
+				break;
+			}
+			
+			if (sel == -1) 
+			{
+				sel = 0;
+			}
+
+			SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
+		}
+	
 		return (INT_PTR)TRUE;
 
+	}
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
 		{
+			instance->foundAdapters.clear();
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}
@@ -1000,13 +1052,27 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			//Force repaint to apply colours
 			instance->ForceRepaint();
 		}
-		else if (LOWORD(wParam) == IDC_RESET_COLOURS)
+		else if (LOWORD(wParam) == IDC_RESET_CONFIG)
 		{
 			instance->configManager->ResetConfig();
 			instance->UpdateOpacity(instance->roothWnd);
 			instance->ForceRepaint();
 			instance->UpdateBitmapColours();
 			instance->WriteWindowPos(); //We reset the whole cfg so re-write this
+
+			HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
+			HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+			if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
+			{
+				Button_SetCheck(chkBtn, TRUE);
+				ComboBox_Enable(dropDown, FALSE);
+			}
+			else
+			{
+				Button_SetCheck(chkBtn, FALSE);
+				ComboBox_Enable(dropDown, TRUE);
+			}
 		}
 		else if (LOWORD(wParam) == IDC_OPACITY)
 		{
@@ -1016,9 +1082,53 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		{
 			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_TEXT), hDlg, TextProc);
 		}
+		else if(HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
+		{
+			BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
+			HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+			if (dropDown != NULL)
+			{
+				ComboBox_Enable(dropDown, !enabled);
+
+				if (enabled)
+				{
+					char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
+					strcpy(buf, "AUTO");
+					instance->configManager->UpdateSelectedAdapter((UCHAR*)&buf);
+				}
+				else
+				{
+					instance->UpdateSelectedAdapter(dropDown);
+				}
+			}
+		}
+		else if (HIWORD(wParam) == CBN_SELCHANGE)
+		{
+			instance->UpdateSelectedAdapter(HWND(lParam));
+
+		}
 		break;
 	}
 	return (INT_PTR)FALSE;
+}
+
+void UIManager::UpdateSelectedAdapter(HWND dropDown)
+{
+	int selIndex = SendMessage(dropDown, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+	WCHAR selItemName[IF_MAX_STRING_SIZE + 1];
+	selItemName[IF_MAX_STRING_SIZE] = 0;
+	SendMessage(dropDown, CB_GETLBTEXT, (WPARAM)selIndex, (LPARAM)selItemName);
+
+	//Match back up with address
+	for (int i = 0; i < instance->foundAdapters.size(); i++)
+	{
+		if (!wcscmp(selItemName, instance->foundAdapters[i].Description))
+		{
+			instance->configManager->UpdateSelectedAdapter(instance->foundAdapters[i].PermanentPhysicalAddress);
+			break;
+		}
+	}
 }
 
 COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)

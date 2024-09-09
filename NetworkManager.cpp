@@ -11,12 +11,13 @@ NetworkManager::~NetworkManager()
 }
 
 //PURPOSE: Find currently active adaptor, cache it's position, then track the different between the previous In/Out octets vs the current
-std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces)
+std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces, UCHAR* override)
 {
 	double dl = -1.0;
 	double ul = -1.0;
 	int adapterIndex = -1;
-	if (GetIfTable2(interfaces) == NO_ERROR)
+	DWORD res = GetIfTable2(interfaces);
+	if (res == NO_ERROR)
 	{
 		MIB_IF_ROW2* row;
 
@@ -25,12 +26,19 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 			row = &interfaces[0]->Table[i];
 			if (row)
 			{
+				if (!strcmp((char*)override, (char*)&row->PermanentPhysicalAddress)) //We've set this as our adapter
+				{
+					goto foundAdapter;
+				}
+
 				//Find any interface that has incoming data, is marked as connected and not set as Unspecified medium type
-				if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected || row->PhysicalMediumType == NdisPhysicalMediumUnspecified)
+				if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected || row->PhysicalMediumType == NdisPhysicalMediumUnspecified
+					|| row->PhysicalAddressLength == 0)
 				{
 					continue;
 				}
 
+			foundAdapter:
 				adapterIndex = i;
 				break;
 			}
@@ -79,9 +87,51 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 	}
 
 	//GetIfTable2 allocates memory for the tables, which we must delete
-	FreeMibTable(interfaces[0]);
+	if (res == NO_ERROR)
+	{
+		FreeMibTable(interfaces[0]);
+	}
 
 	return std::make_tuple(dl, ul);
+}
+
+std::vector<MIB_IF_ROW2> NetworkManager::GetAllAdapters()
+{
+	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
+	std::vector<MIB_IF_ROW2> ret = std::vector<MIB_IF_ROW2>();
+
+	if (!interfaces)
+	{
+		goto Exit;
+	}
+
+	if (GetIfTable2(interfaces) == NO_ERROR)
+	{
+		MIB_IF_ROW2* row;
+
+		std::map<UCHAR, bool> foundAdapters = std::map<UCHAR, bool>();;
+
+		for (int i = 0; i < interfaces[0]->NumEntries; i++)
+		{
+			row = &interfaces[0]->Table[i];
+			if (row && !foundAdapters[*row->PermanentPhysicalAddress])
+			{
+				if(row->PhysicalMediumType == NdisPhysicalMediumUnspecified
+					|| *row->PermanentPhysicalAddress == (UCHAR)'\n' || row->PhysicalAddressLength == 0)
+				{
+					continue;
+				}
+				ret.push_back(*row);
+				foundAdapters[*row->PermanentPhysicalAddress] = true;
+			}
+		}
+
+		FreeMibTable(interfaces[0]);
+		free(interfaces);
+	}
+
+Exit:
+	return ret;
 }
 
 INT NetworkManager::GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data)
@@ -179,9 +229,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 
 			TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
 
-
 			INT status = EnableNetworkTracing(&row);
-
 
 			if (status == NO_ERROR)
 			{

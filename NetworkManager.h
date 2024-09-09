@@ -58,7 +58,8 @@ public:
 class NetworkManager
 {
 public:
-	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces);
+	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces, UCHAR* override);
+	std::vector<MIB_IF_ROW2> GetAllAdapters();
 	INT GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data);
 	INT EnableNetworkTracing(PMIB_TCPROW2 row);
 	bool HasElevatedPrivileges();
