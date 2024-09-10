@@ -63,14 +63,14 @@ public:
 	int lastX, lastY;
 	int opacity;
 	
-	UCHAR* uniqueAddr;
+	char* uniqueAddr;
 
 	void ResetConfig();
 	bool ReadData();
 
 	ConfigManager(LPWSTR configDirOverride);
 	~ConfigManager();
-	void UpdateSelectedAdapter(UCHAR* selAdapterPhysAddr);
+	void UpdateSelectedAdapter(char* selAdapterPhysAddr);
 	void UpdateForegroundColour(COLORREF fg_col);
 	void UpdateChildColour(COLORREF ch_col);
 

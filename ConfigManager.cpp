@@ -17,7 +17,7 @@ ConfigManager::ConfigManager(LPWSTR configDirOverride)
 	childColour = (COLORREF*)malloc(sizeof(COLORREF));
 	uploadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
 	downloadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
-	uniqueAddr = (UCHAR*)malloc(sizeof(UCHAR) * 32);
+	uniqueAddr = (char*)malloc(sizeof(char) * 32);
 
 	if (configDirOverride)
 	{
@@ -48,7 +48,7 @@ ConfigManager::~ConfigManager()
 	}
 }
 
-void ConfigManager::UpdateSelectedAdapter(UCHAR* selAdapterPhysAddr)
+void ConfigManager::UpdateSelectedAdapter(char* selAdapterPhysAddr)
 {
 	int end = 32;
 	memcpy(uniqueAddr, selAdapterPhysAddr, end);

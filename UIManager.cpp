@@ -194,7 +194,7 @@ void UIManager::UpdateInfo()
 
 	while (instance->running)
 	{
-		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces, instance->configManager->uniqueAddr);
+		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces, (UCHAR*)instance->configManager->uniqueAddr);
 
 		double dl = std::get<0>(speedInfo);
 		double ul = std::get<1>(speedInfo);
@@ -1010,7 +1010,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			{
 				char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
 				strcpy(buf, "AUTO");
-				instance->configManager->UpdateSelectedAdapter((UCHAR*)&buf);
+				instance->configManager->UpdateSelectedAdapter(buf);
 
 				SendMessage(hDlg, message, wParam, lParam);
 				break;
@@ -1095,7 +1095,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				{
 					char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
 					strcpy(buf, "AUTO");
-					instance->configManager->UpdateSelectedAdapter((UCHAR*)&buf);
+					instance->configManager->UpdateSelectedAdapter(buf);
 				}
 				else
 				{
@@ -1125,7 +1125,7 @@ void UIManager::UpdateSelectedAdapter(HWND dropDown)
 	{
 		if (!wcscmp(selItemName, instance->foundAdapters[i].Description))
 		{
-			instance->configManager->UpdateSelectedAdapter(instance->foundAdapters[i].PermanentPhysicalAddress);
+			instance->configManager->UpdateSelectedAdapter((char*)instance->foundAdapters[i].PermanentPhysicalAddress);
 			break;
 		}
 	}
