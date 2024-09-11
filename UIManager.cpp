@@ -974,7 +974,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	switch (message)
 	{
 	case WM_INITDIALOG:
-	{
+	{	
 		HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
 
 		if(!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
