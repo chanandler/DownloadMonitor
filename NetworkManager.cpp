@@ -207,7 +207,6 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 
 	PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
 
-	//Get actual data
 	if (tcpTbl)
 	{
 		for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
