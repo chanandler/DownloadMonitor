@@ -20,6 +20,7 @@
 #include "Commctrl.h"
 #include <map>
 
+#define USE_ACTIVATION false //All activation code is wrapped around this define
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
@@ -168,6 +169,7 @@ private:
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);
 	static INT_PTR OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort);

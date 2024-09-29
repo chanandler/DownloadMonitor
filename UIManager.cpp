@@ -843,8 +843,10 @@ void UIManager::UpdatePosIfRequired()
 		return;
 	}
 
-	//TODO get the actual max width instead of guessing
-	SetWindowPos(roothWnd, HWND_TOPMOST, 1200, 0, 0, 0, SWP_NOSIZE);
+	int xPos = GetSystemMetrics(SM_CXSCREEN);
+	xPos -= (xPos / 4);
+
+	SetWindowPos(roothWnd, HWND_TOPMOST, xPos, 0, 0, 0, SWP_NOSIZE);
 	WriteWindowPos();
 }
 
@@ -954,9 +956,6 @@ INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LP
 
 		return (INT_PTR)TRUE;
 	}
-
-
-
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 		{
@@ -975,6 +974,11 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	{
 	case WM_INITDIALOG:
 	{	
+#ifndef USE_ACTIVATION
+		HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
+		ShowWindow(activateBtn, FALSE);
+#endif
+
 		HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
 
 		if(!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
@@ -1033,6 +1037,10 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			instance->foundAdapters.clear();
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
+		}
+		else if(LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
+		{
+			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
 		}
 		else if (LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
 		{
@@ -1275,6 +1283,30 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 	return (INT_PTR)FALSE;
 }
 
+INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+	case WM_INITDIALOG:
+	{
+		return (INT_PTR)TRUE;
+	}
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
 
 void UIManager::ForceRepaint()
 {

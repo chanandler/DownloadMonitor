@@ -48,7 +48,10 @@
 #define IDC_VER_TXT                     1005
 #define IDC_ADAPTER_AUTO_CHECK          1008
 #define IDC_RESET_CONFIG                1009
-#define IDC_EDIT1                       1016
+#define IDC_ACTIVATE                    1010
+#define IDC_LICENSE_KEY                 1018
+#define IDC_IPADDRESS1                  1019
+#define IDC_ACTIVATION_SETTINGS         1020
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -58,7 +61,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1017
+#define _APS_NEXT_CONTROL_VALUE         1021
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
