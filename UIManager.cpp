@@ -974,7 +974,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	{
 	case WM_INITDIALOG:
 	{	
-#ifndef USE_ACTIVATION
+#ifdef USE_ACTIVATION
 		HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
 		ShowWindow(activateBtn, FALSE);
 #endif
