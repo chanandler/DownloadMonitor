@@ -52,10 +52,10 @@
 #define CHILD_INITIAL_HEIGHT 20
 
 #define POPUP_BUF_SIZE 1000
-#define POPUP_INITIAL_WIDTH 430
+#define POPUP_INITIAL_WIDTH 450
 #define POPUP_INITIAL_HEIGHT 150
 
-#define NO_PRIV_POPUP_INITIAL_WIDTH 350
+#define NO_PRIV_POPUP_INITIAL_WIDTH 400
 #define NO_PRIV_POPUP_INITIAL_HEIGHT 25
 
 class BitmapScaleInfo
@@ -163,6 +163,7 @@ private:
 	void WriteWindowPos();
 	void ShowNoPrivilegesTooptip(POINT pos);
 	void UpdateSelectedAdapter(HWND dropDown);
+	void TryElevate();
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);

@@ -105,7 +105,6 @@ void UIManager::UpdateBitmapColours()
 	SetBmToColour(downloadIconBm, downloadIconInst, downloadIconHDC, *configManager->downloadTxtColour, downloadBMIndexes);
 }
 
-//TODO use this or something similar to work out if our requested coords are off screen
 void UIManager::GetMaxScreenRect()
 {
 	int currDPI = GetDpiForWindow(roothWnd);
@@ -606,6 +605,14 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		instance->popup = NULL;
 		break;
 	}
+	case WM_LBUTTONDOWN:	//Allow user to quickly elevate when in standard mode
+	{
+		if(uIdSubclass != 1)
+		{
+			break;
+		}
+		instance->TryElevate();
+	}
 	}
 	return DefSubclassProc(hWnd, message, wParam, lParam);
 }
@@ -692,8 +699,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
+		break;
 	}
-	break;
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
@@ -704,8 +711,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 		FillRect(hdc, &ps.rcPaint, brush);
 		EndPaint(hWnd, &ps);
+		break;
 	}
-	break;
 	case WM_DPICHANGED:
 	{
 		//Update font and bitmap scale values
@@ -729,6 +736,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		break;
+
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
@@ -800,7 +808,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 void UIManager::ShowNoPrivilegesTooptip(POINT pos)
 {
 	HWND errPopup = CreateWindow(WC_EDIT, L"", WS_VISIBLE | WS_POPUP | ES_CENTER | ES_READONLY | WS_BORDER,
-		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
+		pos.x, pos.y, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
 
 	if (errPopup == NULL)
 	{
@@ -825,7 +833,7 @@ void UIManager::ShowNoPrivilegesTooptip(POINT pos)
 	SendMessage(errPopup, WM_SETFONT, (WPARAM)txtFont, NULL);
 
 	free(modFont);
-	SetWindowText(errPopup, L"Process logging requires elevated privileges");
+	SetWindowText(errPopup, L"Process monitoring requires elevation (Left-click to attempt)"); //We should move things like this to the string table
 	SetWindowSubclass(errPopup, PopupProc, 1, 0);
 
 	//For some reason MOUSEMOVE messages aren't being recieved by a static control,
@@ -843,6 +851,7 @@ void UIManager::UpdatePosIfRequired()
 		return;
 	}
 
+	//If off screen, place 3/4 along the top right of the users screen
 	int xPos = GetSystemMetrics(SM_CXSCREEN);
 	xPos -= (xPos / 4);
 
@@ -941,6 +950,35 @@ void UIManager::WriteWindowPos()
 	configManager->UpdateWindowPos(x, y);
 }
 
+void UIManager::TryElevate()
+{
+	WCHAR path[MAX_PATH];
+
+	if (!GetModuleFileName(NULL, path, MAX_PATH))
+	{
+		return;
+	}
+
+	SHELLEXECUTEINFO sEI = { sizeof(sEI) };
+	sEI.lpVerb = L"runas";
+	sEI.lpFile = path;
+	sEI.hwnd = NULL;
+	sEI.nShow = SW_NORMAL;
+
+	if(!ShellExecuteEx(&sEI))
+	{
+		DWORD exErr = GetLastError();
+		if(exErr == ERROR_CANCELLED)
+		{
+			//User denied the UAC prompt (or something else went wrong)
+		}
+
+		return;
+	}
+
+	SendMessage(roothWnd, WM_CLOSE, NULL, NULL); //Shut down this instance
+}
+
 INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
@@ -1004,7 +1042,12 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			{
 				SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
 
-				if(!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+				//If in auto mode, set to the currently bound adapater...
+				if(autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+				{
+					sel = i; 
+				}
+				else if(!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
 				{
 					sel = i;
 				}
@@ -1019,7 +1062,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				SendMessage(hDlg, message, wParam, lParam);
 				break;
 			}
-			
+
 			if (sel == -1) 
 			{
 				sel = 0;

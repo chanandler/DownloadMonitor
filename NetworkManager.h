@@ -65,6 +65,7 @@ public:
 	bool HasElevatedPrivileges();
 	std::vector<ProcessData*> GetTopConsumingProcesses();
 	std::map<DWORD, PidData> pidMap;
+	UCHAR currentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
 	NetworkManager();
 	~NetworkManager();
 private:
@@ -73,7 +74,6 @@ private:
 
 	PMIB_TCPTABLE2 GetAllocatedTcpTable();
 
-	UCHAR currentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
 	//int cacheIndex = -1;
 };
 
