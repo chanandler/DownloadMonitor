@@ -11,7 +11,8 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 UIManager* UIManager::instance = NULL;
 NetworkManager* UIManager::netManager = NULL;
 ConfigManager* UIManager::configManager = NULL;
-BOOL UIManager::hasMouseEvent = FALSE;
+BOOL UIManager::hasChildMouseEvent = FALSE;
+BOOL UIManager::hasRootMouseEvent = FALSE;
 
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -440,14 +441,14 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	}
 	case WM_MOUSEMOVE:
 	{
-		if (hasMouseEvent == FALSE)
+		if (hasChildMouseEvent == FALSE)
 		{
 			TRACKMOUSEEVENT tme{ 0 };
 			tme.cbSize = sizeof(TRACKMOUSEEVENT);
 			tme.dwFlags = TME_HOVER | TME_LEAVE;
 			tme.hwndTrack = hWnd;
 			tme.dwHoverTime = HOVER_DEFAULT;
-			hasMouseEvent = TrackMouseEvent(&tme);
+			hasChildMouseEvent = TrackMouseEvent(&tme);
 		}
 		break;
 	}
@@ -457,6 +458,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		{
 			break;
 		}
+
 		POINT p;
 		p.x = GET_X_LPARAM(lParam);
 		p.y = GET_Y_LPARAM(lParam);
@@ -475,7 +477,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 	}
 	case WM_MOUSELEAVE:
 	{
-		hasMouseEvent = FALSE;
+		hasChildMouseEvent = FALSE;
 		break;
 	}
 	case WM_PAINT:
@@ -617,6 +619,12 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	return DefSubclassProc(hWnd, message, wParam, lParam);
 }
 
+void UIManager::ResetCursorDragOffset()
+{
+	xDragOffset = -1;
+	yDragOffset = -1;
+}
+
 LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -650,7 +658,17 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
 		break;
 	}
-
+	case WM_MOUSEHOVER:
+	{
+		//Pass the hover message to the childproc which handles it
+		ChildProc(hWnd, message, wParam, lParam);
+		break;
+	}
+	case WM_MOUSELEAVE:
+	{
+		hasRootMouseEvent = FALSE;
+		break;
+	}
 	case WM_LBUTTONDOWN:
 		//Restrict mouse input to current window
 		SetCapture(hWnd);
@@ -660,10 +678,21 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		//Window no longer requires all mouse input
 		ReleaseCapture();
 		instance->WriteWindowPos();
+		instance->ResetCursorDragOffset();
 		break;
 
 	case WM_MOUSEMOVE:
 	{
+		if (hasRootMouseEvent == FALSE)
+		{
+			TRACKMOUSEEVENT tme{ 0 };
+			tme.cbSize = sizeof(TRACKMOUSEEVENT);
+			tme.dwFlags = TME_HOVER | TME_LEAVE;
+			tme.hwndTrack = hWnd;
+			tme.dwHoverTime = HOVER_DEFAULT;
+			hasRootMouseEvent = TrackMouseEvent(&tme);
+		}
+
 		if (GetCapture() == hWnd)  //Check if this window has mouse input
 		{
 			RECT windowRect;
@@ -677,10 +706,28 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			int windowHeight = windowRect.bottom - windowRect.top;
 			int windowWidth = windowRect.right - windowRect.left;
 
+			//Make the cursor stay in the same place relative to the window
+
+			if (instance->xDragOffset == -1) 
+			{
+				instance->xDragOffset = windowWidth - mousePos.x;
+			}
+
+			if (instance->yDragOffset == -1)
+			{
+				instance->yDragOffset = windowHeight - mousePos.y;
+			}
+
 			ClientToScreen(hWnd, &mousePos);
 
 			//Set the window's new screen position
-			MoveWindow(hWnd, mousePos.x - (windowWidth / 2), mousePos.y, windowWidth, windowHeight, TRUE);
+			// 
+			//We could use this line and keep the cursor's Y position the same as we drag the window, like with the X, but if we keep the top of the window at the cursor, then it provides
+			//A "free" way of preventing the window from being dragged above the top of the screen, as the cursor blocks it
+			// 
+			//MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y - (windowHeight - instance->yDragOffset), windowWidth, windowHeight, TRUE);
+			
+			MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y, windowWidth, windowHeight, TRUE);
 		}
 		break;
 	}

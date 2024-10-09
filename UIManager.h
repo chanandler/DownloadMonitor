@@ -20,7 +20,7 @@
 #include "Commctrl.h"
 #include <map>
 
-#define USE_ACTIVATION false //All activation code is wrapped around this define
+#define USE_ACTIVATION false //All activation related code is wrapped around this define
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
@@ -99,6 +99,11 @@ public:
 
 	~UIManager();
 private:
+
+	//For keeping the cursor in the same position when dragging the window
+	LONG xDragOffset = -1;
+	LONG yDragOffset = -1;
+
 	HINSTANCE hInst;                                // current instance
 	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
@@ -137,14 +142,15 @@ private:
 	BitmapScaleInfo* bmScaleInfo;
 	FontScaleInfo* fontScaleInfo;
 
-	static BOOL hasMouseEvent;
+	static BOOL hasChildMouseEvent;
+	static BOOL hasRootMouseEvent;
 
 	HWND popup;
 
 	std::vector<MIB_IF_ROW2> foundAdapters;
 
 	WCHAR* GetStringFromBits(double inBits);
-
+	void ResetCursorDragOffset();
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
