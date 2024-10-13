@@ -25,7 +25,7 @@
 
 
 //TODO:
-//Fix colours not saving hue,luminence, etc.
+//Implement themes
 //Add some kind of license key systsm to copy DU meter
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)

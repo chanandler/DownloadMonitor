@@ -213,6 +213,9 @@ void UIManager::UpdateInfo()
 			free(ulBuf);
 		}
 
+		//Known bugs:
+		//Processes with a high upload either don't show up at all, or have the wrong process name
+
 		if (instance->popup != NULL) //Tick the popup if it exists
 		{
 			WCHAR pNames[POPUP_BUF_SIZE];
@@ -1059,6 +1062,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	{
 	case WM_INITDIALOG:
 	{	
+		instance->settingsWnd = hDlg;
 #ifdef USE_ACTIVATION
 		HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
 		ShowWindow(activateBtn, FALSE);
@@ -1074,11 +1078,64 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		{
 			Button_SetCheck(chkBtn, FALSE);
 		}
+
+		SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
+		////Init the adapter selection dropdown
+		//BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
+		//HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+		//if(dropDown != NULL)
+		//{
+		//	ComboBox_Enable(dropDown, !autoMode);
+
+		//	instance->foundAdapters = netManager->GetAllAdapters();
+
+		//	int sel = -1;
+		//	for (int i = 0; i < instance->foundAdapters.size(); i++)
+		//	{
+		//		SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
+
+		//		//If in auto mode, set to the currently bound adapater...
+		//		if(autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+		//		{
+		//			sel = i; 
+		//		}
+		//		else if(!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+		//		{
+		//			sel = i;
+		//		}
+		//	}
+		//
+		//	if(sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
+		//	{
+		//		char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
+		//		strcpy(buf, "AUTO");
+		//		instance->configManager->UpdateSelectedAdapter(buf);
+
+		//		SendMessage(hDlg, message, wParam, lParam);
+		//		break;
+		//	}
+
+		//	if (sel == -1) 
+		//	{
+		//		sel = 0;
+		//	}
+
+		//	SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
+		//}
+	
+		return (INT_PTR)TRUE;
+
+	}
+	case WM_SETCBSEL:
+	{
 		//Init the adapter selection dropdown
 		BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
 		HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
 
-		if(dropDown != NULL)
+		BOOL addToDD = (BOOL)wParam;
+
+		if (dropDown != NULL)
 		{
 			ComboBox_Enable(dropDown, !autoMode);
 
@@ -1087,20 +1144,23 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			int sel = -1;
 			for (int i = 0; i < instance->foundAdapters.size(); i++)
 			{
-				SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
+				if (addToDD) 
+				{
+					SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
+				}
 
 				//If in auto mode, set to the currently bound adapater...
-				if(autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+				if (autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
 				{
-					sel = i; 
+					sel = i;
 				}
-				else if(!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+				else if (!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
 				{
 					sel = i;
 				}
 			}
-		
-			if(sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
+
+			if (sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
 			{
 				char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
 				strcpy(buf, "AUTO");
@@ -1110,22 +1170,20 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				break;
 			}
 
-			if (sel == -1) 
+			if (sel == -1)
 			{
 				sel = 0;
 			}
 
 			SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
 		}
-	
-		return (INT_PTR)TRUE;
-
 	}
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
 		{
 			instance->foundAdapters.clear();
 			EndDialog(hDlg, LOWORD(wParam));
+			instance->settingsWnd = NULL;
 			return (INT_PTR)TRUE;
 		}
 		else if(LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
@@ -1194,6 +1252,16 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 					char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
 					strcpy(buf, "AUTO");
 					instance->configManager->UpdateSelectedAdapter(buf);
+					if (instance->settingsWnd != NULL)
+					{
+						//This is really lazy, but basically we must wait for NetworkManager to update it's currentPhysicalAddress variable
+						//so the WM_SETCBSEL message is handled correctly and shows the correct selection
+						//The NetworkManager updates this ever second, causing this race condition
+						//We could update currentPhysicalAddress from here but then that would break the newAdapater check in NetworkManager
+
+						std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
+						SendMessage(instance->settingsWnd, WM_SETCBSEL, (WPARAM)FALSE, NULL);
+					}
 				}
 				else
 				{

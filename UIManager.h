@@ -24,6 +24,7 @@
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
+#define WM_SETCBSEL (WM_USER + 2)
 #define ONE_SECOND 1000000
 
 #define EXIT 1
@@ -117,6 +118,8 @@ private:
 	bool running = false;
 
 	HWND roothWnd;
+
+	HWND settingsWnd;
 
 	WCHAR dlBuf[200];
 	WCHAR ulBuf[200];
