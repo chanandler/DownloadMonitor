@@ -312,9 +312,13 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 				{
 					DWORD bufSize = 1024;
 					WCHAR nameBuf[1024];
-					QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
-					CloseHandle(handle);
+					INT queryResult = QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
 
+					if(queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
+					{
+						swprintf_s(nameBuf, L"System");
+					}
+					CloseHandle(handle);
 					ProcessData* data = new ProcessData(row.dwOwningPid, nameBuf, finalIn, finalOut);
 					if (data)
 					{

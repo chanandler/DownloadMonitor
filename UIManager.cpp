@@ -213,9 +213,6 @@ void UIManager::UpdateInfo()
 			free(ulBuf);
 		}
 
-		//Known bugs:
-		//Processes with a high upload either don't show up at all, or have the wrong process name
-
 		if (instance->popup != NULL) //Tick the popup if it exists
 		{
 			WCHAR pNames[POPUP_BUF_SIZE];
