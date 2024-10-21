@@ -52,6 +52,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		return;
 	}
 
+	monitorFinder = new MonitorData();
+	monitorFinder->BuildMonitorList();
+
 	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, DL_INITIAL_X,
 		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, UL_INITIAL_X,
@@ -181,6 +184,7 @@ UIManager::~UIManager()
 
 	delete netManager;
 	delete configManager;
+	delete monitorFinder;
 }
 
 void UIManager::UpdateInfo()
@@ -413,6 +417,37 @@ void UIManager::OnSelectItem(int sel)
 	{
 		SendMessage(roothWnd, WM_CLOSE, NULL, NULL);
 	}
+	if (sel == MOVE_TO)
+	{
+		//Get all monitors
+		//Populate into dropdown
+		//Whichever is selected, move there
+
+
+		POINT point;
+		GetCursorPos(&point);
+
+		monitorFinder->BuildMonitorList();
+		HMENU menu = CreatePopupMenu();
+
+		//MONITORINFOEX monitorInfo; We can query the monitor's name using MONITORINFOEX, but it doesn't match up with the 
+		//display numbers shown in control panel, so using the index makes more sense.
+
+		MONITORINFO monitorInfo;
+		monitorInfo.cbSize = sizeof(MONITORINFO);
+		for(int i = 0; i < monitorFinder->mList.size(); i++)
+		{
+			HMONITOR monitor = monitorFinder->mList[i];
+			
+			GetMonitorInfo(monitor, &monitorInfo);
+			WCHAR nameBuf[MAX_PATH];
+			swprintf_s(nameBuf, L"Display %i", i + 1);
+			AppendMenu(menu, MF_STRING, i + 1, nameBuf);
+		}
+
+		SetForegroundWindow(instance->roothWnd); 
+		instance->OnSelectMonitorItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
+	}
 	if (sel == ABOUT)
 	{
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), roothWnd, AboutProc);
@@ -421,6 +456,42 @@ void UIManager::OnSelectItem(int sel)
 	{
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_SETTINGS), roothWnd, SettingsProc);
 	}
+}
+
+void UIManager::OnSelectMonitorItem(int sel)
+{
+	if(sel == 0)
+	{
+		return;
+	}
+
+	int vecPos = sel - 1;
+
+	if(vecPos >= monitorFinder->mList.size())
+	{
+		return;
+	}
+
+	HMONITOR monitor = monitorFinder->mList[vecPos];
+	MONITORINFOEX monitorInfo;
+	monitorInfo.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(monitor, &monitorInfo);
+
+	int mWidth = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
+	
+	int offset = mWidth / 4;
+
+	if (monitorInfo.rcWork.left < 0)
+	{
+		mWidth = -offset;
+	}
+	else
+	{
+		mWidth -= offset;
+	}
+
+	SetWindowPos(roothWnd, HWND_TOPMOST, mWidth, monitorInfo.rcWork.top, 0, 0, SWP_NOSIZE);
+	WriteWindowPos();
 }
 
 //For child windows which hold DL/UL texts
@@ -651,6 +722,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		GetCursorPos(&point);
 
 		HMENU menu = CreatePopupMenu();
+		AppendMenu(menu, MF_STRING, MOVE_TO, L"Move to...");
 		AppendMenu(menu, MF_STRING, EXIT, L"Exit");
 		AppendMenu(menu, MF_STRING, ABOUT, L"About");
 		AppendMenu(menu, MF_STRING, SETTINGS, L"Settings");
@@ -899,7 +971,7 @@ void UIManager::UpdatePosIfRequired()
 	}
 
 	//If off screen, place 3/4 along the top right of the users screen
-	int xPos = GetSystemMetrics(SM_CXSCREEN);
+	int xPos = GetSystemMetrics(SM_CXSCREEN); //SM_CXSCREEN == primary monitor
 	xPos -= (xPos / 4);
 
 	SetWindowPos(roothWnd, HWND_TOPMOST, xPos, 0, 0, 0, SWP_NOSIZE);

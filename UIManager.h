@@ -27,9 +27,10 @@
 #define WM_SETCBSEL (WM_USER + 2)
 #define ONE_SECOND 1000000
 
-#define EXIT 1
-#define ABOUT 2
-#define SETTINGS 3
+#define MOVE_TO 1
+#define EXIT 2
+#define ABOUT 3
+#define SETTINGS 4
 
 #define MIN_OPACITY 15
 #define MAX_OPACITY 255
@@ -86,6 +87,26 @@ public:
 	{
 		width = Width;
 		height = Height;
+	}
+};
+
+class MonitorData
+{
+public:
+	std::vector<HMONITOR> mList;
+
+
+	static BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT lprcMonitor, LPARAM pData)
+	{
+		MonitorData* pThis = (MonitorData*)pData;
+		pThis->mList.push_back(hMonitor);
+		return TRUE;
+	}
+
+	void BuildMonitorList()
+	{
+		mList.clear();
+		EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM(this)));
 	}
 };
 
@@ -150,6 +171,8 @@ private:
 
 	HWND popup;
 
+	MonitorData* monitorFinder;
+
 	std::vector<MIB_IF_ROW2> foundAdapters;
 
 	WCHAR* GetStringFromBits(double inBits);
@@ -173,6 +196,7 @@ private:
 	void ShowNoPrivilegesTooptip(POINT pos);
 	void UpdateSelectedAdapter(HWND dropDown);
 	void TryElevate();
+	void OnSelectMonitorItem(int sel);
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
