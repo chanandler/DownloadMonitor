@@ -4,6 +4,7 @@
 //
 #define IDC_MYICON                      2
 #define IDOK2                           2
+#define IDD_ABOUTBO                     9
 #define IDD_NAME_DIALOG                 102
 #define IDS_APP_TITLE                   103
 #define IDD_ABOUTBOX                    103

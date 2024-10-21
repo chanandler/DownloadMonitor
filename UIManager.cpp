@@ -723,9 +723,10 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 		HMENU menu = CreatePopupMenu();
 		AppendMenu(menu, MF_STRING, MOVE_TO, L"Move to...");
-		AppendMenu(menu, MF_STRING, EXIT, L"Exit");
 		AppendMenu(menu, MF_STRING, ABOUT, L"About");
 		AppendMenu(menu, MF_STRING, SETTINGS, L"Settings");
+		AppendMenu(menu, MF_STRING, EXIT, L"Exit");
+
 		SetForegroundWindow(instance->roothWnd); //TrackPopupMenu requires the parent window to be in foreground, otherwise the popupmenu won't be destroyed when clicking off it
 		instance->OnSelectItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
 		break;
