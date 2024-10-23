@@ -174,7 +174,7 @@ private:
 	MonitorData* monitorFinder;
 
 	std::vector<MIB_IF_ROW2> foundAdapters;
-
+	float DivLower(float a, float b);
 	WCHAR* GetStringFromBits(double inBits);
 	void ResetCursorDragOffset();
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);

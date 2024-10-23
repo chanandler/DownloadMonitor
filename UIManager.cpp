@@ -225,7 +225,7 @@ void UIManager::UpdateInfo()
 			std::vector<ProcessData*> topCnsmrs = netManager->GetTopConsumingProcesses();
 
 			//Go through 0 -> max and re-use items that exist, or delete items that beyond the current vector size
-			for(int i = 0; i < MAX_TOP_CONSUMERS; i++)
+			for (int i = 0; i < MAX_TOP_CONSUMERS; i++)
 			{
 				LVITEM lvI = { 0 };
 				lvI.iItem = i;
@@ -234,11 +234,11 @@ void UIManager::UpdateInfo()
 				//See if we have an item at this index
 				BOOL existingItem = ListView_GetItem(instance->popup, &lvI);
 
-				if(existingItem == TRUE && i >= topCnsmrs.size() - 1) //Delete ones beyond the size of the process list
+				if (existingItem == TRUE && i >= topCnsmrs.size() - 1) //Delete ones beyond the size of the process list
 				{
 					ListView_DeleteItem(instance->popup, lvI.iItem);
 				}
-				else if(topCnsmrs.size() > 0 && i < topCnsmrs.size() - 1)
+				else if (topCnsmrs.size() > 0 && i < topCnsmrs.size() - 1)
 				{
 					ProcessData* pData = topCnsmrs[i];
 					LPWSTR exeName = PathFindFileName(topCnsmrs[i]->name);
@@ -427,25 +427,22 @@ void UIManager::OnSelectItem(int sel)
 		POINT point;
 		GetCursorPos(&point);
 
-		monitorFinder->BuildMonitorList();
 		HMENU menu = CreatePopupMenu();
 
 		//MONITORINFOEX monitorInfo; We can query the monitor's name using MONITORINFOEX, but it doesn't match up with the 
 		//display numbers shown in control panel, so using the index makes more sense.
 
-		MONITORINFO monitorInfo;
-		monitorInfo.cbSize = sizeof(MONITORINFO);
-		for(int i = 0; i < monitorFinder->mList.size(); i++)
+		MONITORINFOEX monitorInfo;
+		monitorInfo.cbSize = sizeof(MONITORINFOEX);
+		for (int i = 0; i < monitorFinder->mList.size(); i++)
 		{
 			HMONITOR monitor = monitorFinder->mList[i];
-			
+
 			GetMonitorInfo(monitor, &monitorInfo);
-			WCHAR nameBuf[MAX_PATH];
-			swprintf_s(nameBuf, L"Display %i", i + 1);
-			AppendMenu(menu, MF_STRING, i + 1, nameBuf);
+			AppendMenu(menu, MF_STRING, i + 1, monitorInfo.szDevice);
 		}
 
-		SetForegroundWindow(instance->roothWnd); 
+		SetForegroundWindow(instance->roothWnd);
 		instance->OnSelectMonitorItem(TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, 0, instance->roothWnd, NULL));
 	}
 	if (sel == ABOUT)
@@ -456,42 +453,68 @@ void UIManager::OnSelectItem(int sel)
 	{
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_SETTINGS), roothWnd, SettingsProc);
 	}
+
 }
 
 void UIManager::OnSelectMonitorItem(int sel)
 {
-	if(sel == 0)
+	if (sel == 0)
 	{
 		return;
 	}
 
 	int vecPos = sel - 1;
 
-	if(vecPos >= monitorFinder->mList.size())
+	if (vecPos >= monitorFinder->mList.size())
 	{
 		return;
 	}
 
-	HMONITOR monitor = monitorFinder->mList[vecPos];
-	MONITORINFOEX monitorInfo;
-	monitorInfo.cbSize = sizeof(MONITORINFOEX);
-	GetMonitorInfo(monitor, &monitorInfo);
+	HMONITOR newMonitor = monitorFinder->mList[vecPos];
+	MONITORINFOEX newMonitorInfo;
+	newMonitorInfo.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(newMonitor, &newMonitorInfo);
 
-	int mWidth = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
-	
-	int offset = mWidth / 4;
+	int mWidth = newMonitorInfo.rcWork.right - newMonitorInfo.rcWork.left;
+	int mHeight = newMonitorInfo.rcWork.bottom - newMonitorInfo.rcWork.top;
 
-	if (monitorInfo.rcWork.left < 0)
-	{
-		mWidth = -offset;
-	}
-	else
-	{
-		mWidth -= offset;
-	}
 
-	SetWindowPos(roothWnd, HWND_TOPMOST, mWidth, monitorInfo.rcWork.top, 0, 0, SWP_NOSIZE);
+	//Get current window position
+	//Get normalised value between 0 and 1
+	//Work out that same pos for new monitor's w/h
+
+	HMONITOR currentMonitor = MonitorFromWindow(roothWnd, MONITOR_DEFAULTTONEAREST);
+
+	MONITORINFOEX currentMonitorInfo;
+	currentMonitorInfo.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(currentMonitor, &currentMonitorInfo);
+
+	int cmWidth = currentMonitorInfo.rcWork.right - currentMonitorInfo.rcWork.left;
+	int cmHeight = currentMonitorInfo.rcWork.bottom - currentMonitorInfo.rcWork.top;
+
+	RECT rootPos;
+	GetWindowRect(roothWnd, &rootPos);
+
+	//Work out proportial value and map to new monitor
+
+	float nrmWindowX = (rootPos.left * 1.0 - currentMonitorInfo.rcWork.left * 1.0) / cmWidth * 1.0;
+	float nrmWindowY = (rootPos.top * 1.0 - currentMonitorInfo.rcWork.top * 1.0) / cmHeight * 1.0;
+
+	int finalX = newMonitorInfo.rcWork.left + (mWidth / 100.0) * (nrmWindowX * 100.0);
+	int finalY = newMonitorInfo.rcWork.top + (mHeight / 100.0) * (nrmWindowY * 100.0);
+
+	SetWindowPos(roothWnd, HWND_TOPMOST, finalX, finalY, 0, 0, SWP_NOSIZE);
 	WriteWindowPos();
+}
+
+float UIManager::DivLower(float a, float b)
+{
+	if (a <= b)
+	{
+		return a / b;
+	}
+
+	return b / a;
 }
 
 //For child windows which hold DL/UL texts
@@ -662,7 +685,7 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			LVITEM lvI = { 0 };
 			lvI.iItem = i;
 			lvI.iSubItem = 0;
-			
+
 			BOOL existingItem = ListView_GetItem(instance->popup, &lvI);
 
 			if (existingItem == TRUE) //Delete ones beyond the size of the process list
@@ -670,9 +693,9 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 				ListView_DeleteItem(instance->popup, lvI.iItem);
 			}
 		}
-	
+
 		netManager->pidMap.clear();
-		
+
 		//Destroy this popup when we leave it
 		DestroyWindow(instance->popup);
 		instance->popup = NULL;
@@ -680,7 +703,7 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	}
 	case WM_LBUTTONDOWN:	//Allow user to quickly elevate when in standard mode
 	{
-		if(uIdSubclass != 1)
+		if (uIdSubclass != 1)
 		{
 			break;
 		}
@@ -722,7 +745,12 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		GetCursorPos(&point);
 
 		HMENU menu = CreatePopupMenu();
-		AppendMenu(menu, MF_STRING, MOVE_TO, L"Move to...");
+
+		instance->monitorFinder->BuildMonitorList();
+		if (instance->monitorFinder->mList.size() > 0) 
+		{
+			AppendMenu(menu, MF_STRING, MOVE_TO, L"Move to...");
+		}
 		AppendMenu(menu, MF_STRING, ABOUT, L"About");
 		AppendMenu(menu, MF_STRING, SETTINGS, L"Settings");
 		AppendMenu(menu, MF_STRING, EXIT, L"Exit");
@@ -781,7 +809,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			//Make the cursor stay in the same place relative to the window
 
-			if (instance->xDragOffset == -1) 
+			if (instance->xDragOffset == -1)
 			{
 				instance->xDragOffset = windowWidth - mousePos.x;
 			}
@@ -799,7 +827,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			//A "free" way of preventing the window from being dragged above the top of the screen, as the cursor blocks it
 			// 
 			//MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y - (windowHeight - instance->yDragOffset), windowWidth, windowHeight, TRUE);
-			
+
 			MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y, windowWidth, windowHeight, TRUE);
 		}
 		break;
@@ -863,11 +891,11 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 INT_PTR UIManager::PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort)
 {
-	if((double)val1 > (double)val2)
+	if ((double)val1 > (double)val2)
 	{
 		return -1;
 	}
-	else if((double)val1 == (double)val2)
+	else if ((double)val1 == (double)val2)
 	{
 		return 0;
 	}
@@ -1085,10 +1113,10 @@ void UIManager::TryElevate()
 	sEI.hwnd = NULL;
 	sEI.nShow = SW_NORMAL;
 
-	if(!ShellExecuteEx(&sEI))
+	if (!ShellExecuteEx(&sEI))
 	{
 		DWORD exErr = GetLastError();
-		if(exErr == ERROR_CANCELLED)
+		if (exErr == ERROR_CANCELLED)
 		{
 			//User denied the UAC prompt (or something else went wrong)
 		}
@@ -1131,7 +1159,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	switch (message)
 	{
 	case WM_INITDIALOG:
-	{	
+	{
 		instance->settingsWnd = hDlg;
 #ifdef USE_ACTIVATION
 		HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
@@ -1140,11 +1168,11 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 		HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
 
-		if(!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
+		if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
 		{
 			Button_SetCheck(chkBtn, TRUE);
 		}
-		else 
+		else
 		{
 			Button_SetCheck(chkBtn, FALSE);
 		}
@@ -1193,7 +1221,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 		//	SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
 		//}
-	
+
 		return (INT_PTR)TRUE;
 
 	}
@@ -1214,7 +1242,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			int sel = -1;
 			for (int i = 0; i < instance->foundAdapters.size(); i++)
 			{
-				if (addToDD) 
+				if (addToDD)
 				{
 					SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
 				}
@@ -1256,7 +1284,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			instance->settingsWnd = NULL;
 			return (INT_PTR)TRUE;
 		}
-		else if(LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
+		else if (LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
 		{
 			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
 		}
@@ -1308,7 +1336,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		{
 			DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_TEXT), hDlg, TextProc);
 		}
-		else if(HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
+		else if (HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
 		{
 			BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
 			HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
