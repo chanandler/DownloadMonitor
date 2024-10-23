@@ -434,9 +434,17 @@ void UIManager::OnSelectItem(int sel)
 
 		MONITORINFOEX monitorInfo;
 		monitorInfo.cbSize = sizeof(MONITORINFOEX);
+
+		HMONITOR currentMonitor = MonitorFromWindow(roothWnd, MONITOR_DEFAULTTONEAREST);
+
 		for (int i = 0; i < monitorFinder->mList.size(); i++)
 		{
 			HMONITOR monitor = monitorFinder->mList[i];
+
+			if (currentMonitor == monitor)
+			{
+				continue;
+			}
 
 			GetMonitorInfo(monitor, &monitorInfo);
 			AppendMenu(menu, MF_STRING, i + 1, monitorInfo.szDevice);
