@@ -437,17 +437,14 @@ void UIManager::OnSelectItem(int sel)
 
 		HMONITOR currentMonitor = MonitorFromWindow(roothWnd, MONITOR_DEFAULTTONEAREST);
 
+
 		for (int i = 0; i < monitorFinder->mList.size(); i++)
 		{
 			HMONITOR monitor = monitorFinder->mList[i];
-
-			if (currentMonitor == monitor)
-			{
-				continue;
-			}
-
+			
 			GetMonitorInfo(monitor, &monitorInfo);
-			AppendMenu(menu, MF_STRING, i + 1, monitorInfo.szDevice);
+			AppendMenu(menu, currentMonitor == monitor ? MF_STRING | MF_GRAYED : MF_STRING,
+				i + 1, monitorInfo.szDevice);
 		}
 
 		SetForegroundWindow(instance->roothWnd);
