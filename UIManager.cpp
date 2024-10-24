@@ -372,7 +372,7 @@ ATOM UIManager::RegisterChildWindowClass(HINSTANCE hInstance)
 
 HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
-	hInst = hInstance; // Store instance handle in our global variable
+	hInst = hInstance;
 
 	HWND hWnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_WINDOWEDGE, szWindowClass, szTitle, WS_POPUP,
 		CW_USEDEFAULT, 0, ROOT_INITIAL_WIDTH, ROOT_INITIAL_HEIGHT, nullptr, nullptr, hInstance, nullptr);
@@ -423,20 +423,15 @@ void UIManager::OnSelectItem(int sel)
 		//Populate into dropdown
 		//Whichever is selected, move there
 
-
 		POINT point;
 		GetCursorPos(&point);
 
 		HMENU menu = CreatePopupMenu();
 
-		//MONITORINFOEX monitorInfo; We can query the monitor's name using MONITORINFOEX, but it doesn't match up with the 
-		//display numbers shown in control panel, so using the index makes more sense.
-
 		MONITORINFOEX monitorInfo;
 		monitorInfo.cbSize = sizeof(MONITORINFOEX);
 
 		HMONITOR currentMonitor = MonitorFromWindow(roothWnd, MONITOR_DEFAULTTONEAREST);
-
 
 		for (int i = 0; i < monitorFinder->mList.size(); i++)
 		{
@@ -458,7 +453,6 @@ void UIManager::OnSelectItem(int sel)
 	{
 		DialogBox(hInst, MAKEINTRESOURCE(IDD_SETTINGS), roothWnd, SettingsProc);
 	}
-
 }
 
 void UIManager::OnSelectMonitorItem(int sel)
@@ -483,7 +477,6 @@ void UIManager::OnSelectMonitorItem(int sel)
 	int mWidth = newMonitorInfo.rcWork.right - newMonitorInfo.rcWork.left;
 	int mHeight = newMonitorInfo.rcWork.bottom - newMonitorInfo.rcWork.top;
 
-
 	//Get current window position
 	//Get normalised value between 0 and 1
 	//Work out that same pos for new monitor's w/h
@@ -505,8 +498,8 @@ void UIManager::OnSelectMonitorItem(int sel)
 	float nrmWindowX = (rootPos.left * 1.0 - currentMonitorInfo.rcWork.left * 1.0) / cmWidth * 1.0;
 	float nrmWindowY = (rootPos.top * 1.0 - currentMonitorInfo.rcWork.top * 1.0) / cmHeight * 1.0;
 
-	int finalX = newMonitorInfo.rcWork.left + (mWidth / 100.0) * (nrmWindowX * 100.0);
-	int finalY = newMonitorInfo.rcWork.top + (mHeight / 100.0) * (nrmWindowY * 100.0);
+	int finalX = newMonitorInfo.rcWork.left + (mWidth * nrmWindowX);
+	int finalY = newMonitorInfo.rcWork.top + (mHeight * nrmWindowY);
 
 	SetWindowPos(roothWnd, HWND_TOPMOST, finalX, finalY, 0, 0, SWP_NOSIZE);
 	WriteWindowPos();
