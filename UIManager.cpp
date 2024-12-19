@@ -745,7 +745,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		HMENU menu = CreatePopupMenu();
 
 		instance->monitorFinder->BuildMonitorList();
-		if (instance->monitorFinder->mList.size() > 0) 
+		if (instance->monitorFinder->mList.size() > 1) 
 		{
 			AppendMenu(menu, MF_STRING, MOVE_TO, L"Move to...");
 		}
@@ -1316,7 +1316,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 					{
 						//This is really lazy, but basically we must wait for NetworkManager to update it's currentPhysicalAddress variable
 						//so the WM_SETCBSEL message is handled correctly and shows the correct selection
-						//The NetworkManager updates this ever second, causing this race condition
+						//The NetworkManager updates this every second, causing this race condition
 						//We could update currentPhysicalAddress from here but then that would break the newAdapater check in NetworkManager
 
 						std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
