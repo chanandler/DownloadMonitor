@@ -52,7 +52,7 @@ void ConfigManager::UpdateSelectedAdapter(char* selAdapterPhysAddr)
 {
 	int end = 32;
 	memcpy(uniqueAddr, selAdapterPhysAddr, end);
-	uniqueAddr[end] = 0;
+	uniqueAddr[end - 1] = 0;
 
 	WriteData();
 }
