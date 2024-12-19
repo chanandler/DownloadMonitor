@@ -116,7 +116,7 @@ std::vector<MIB_IF_ROW2> NetworkManager::GetAllAdapters()
 			row = &interfaces[0]->Table[i];
 			if (row && !foundAdapters[*row->PermanentPhysicalAddress])
 			{
-				if(row->PhysicalMediumType == NdisPhysicalMediumUnspecified
+				if((row->PhysicalMediumType == NdisPhysicalMediumUnspecified || row->PhysicalMediumType == NdisPhysicalMediumBluetooth)
 					|| *row->PermanentPhysicalAddress == (UCHAR)'\n' || row->PhysicalAddressLength == 0)
 				{
 					continue;
