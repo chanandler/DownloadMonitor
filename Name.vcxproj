@@ -132,6 +132,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ActivationManager.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Name.h" />
     <ClInclude Include="NetworkManager.h" />
@@ -141,6 +142,7 @@
     <ClInclude Include="UIManager.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ActivationManager.cpp" />
     <ClCompile Include="DownloadApp.cpp" />
     <ClCompile Include="NetworkManager.cpp" />
     <ClCompile Include="ConfigManager.cpp" />

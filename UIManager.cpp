@@ -234,11 +234,11 @@ void UIManager::UpdateInfo()
 				//See if we have an item at this index
 				BOOL existingItem = ListView_GetItem(instance->popup, &lvI);
 
-				if (existingItem == TRUE && i >= topCnsmrs.size() - 1) //Delete ones beyond the size of the process list
+				if (existingItem == TRUE && i > topCnsmrs.size() - 1) //Delete ones beyond the size of the process list
 				{
 					ListView_DeleteItem(instance->popup, lvI.iItem);
 				}
-				else if (topCnsmrs.size() > 0 && i < topCnsmrs.size() - 1)
+				else if (topCnsmrs.size() > 0 && i < topCnsmrs.size())
 				{
 					ProcessData* pData = topCnsmrs[i];
 					LPWSTR exeName = PathFindFileName(topCnsmrs[i]->name);
@@ -906,8 +906,8 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	if (popup != NULL)
 	{
 		return;
-		DestroyWindow(popup);
-		popup = NULL;
+		/*DestroyWindow(popup);
+		popup = NULL;*/
 	}
 
 	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT,
@@ -924,6 +924,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 
 	//Init collumns
 	//NAME	 DOWNLOAD	UPLOAD
+	int totalWidth = 0;
 	WCHAR cText[256];
 	for (int i = 0; i < 3; i++)
 	{
@@ -932,7 +933,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 		lvc.cx = MulDiv(POPUP_INITIAL_WIDTH / 3, currDPI, USER_DEFAULT_SCREEN_DPI);
 		lvc.fmt = LVCFMT_FIXED_WIDTH;
 
-
+		totalWidth += lvc.cx;
 		LoadString(hInst,
 			IDS_FIRST_COLUMN + i,
 			cText,
@@ -941,6 +942,8 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 		ListView_InsertColumn(popup, i, &lvc);
 	}
 
+	++totalWidth;
+
 	HWND lvHeader = ListView_GetHeader(popup);
 
 	DWORD currentStyle = GetWindowLong(lvHeader, GWL_STYLE);
@@ -948,7 +951,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 
 	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
 
-	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
+	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, totalWidth);
 }
 
 void UIManager::ShowNoPrivilegesTooptip(POINT pos)
@@ -1019,7 +1022,7 @@ void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
 	WriteWindowPos();
 }
 
-void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos)
+void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos, int minWidth)
 {
 	int currDPI = GetDpiForWindow(hWnd);
 
@@ -1028,6 +1031,10 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 	int scaledWidth = MulDiv(initialWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
 	int scaledHeight = MulDiv(initialHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
 
+	if(minWidth != -1 && scaledWidth < minWidth)
+	{
+		scaledWidth = minWidth;
+	}
 
 	SetWindowPos(hWnd, hWnd, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
 	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
@@ -1176,49 +1183,6 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 		}
 
 		SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
-		////Init the adapter selection dropdown
-		//BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
-		//HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
-
-		//if(dropDown != NULL)
-		//{
-		//	ComboBox_Enable(dropDown, !autoMode);
-
-		//	instance->foundAdapters = netManager->GetAllAdapters();
-
-		//	int sel = -1;
-		//	for (int i = 0; i < instance->foundAdapters.size(); i++)
-		//	{
-		//		SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
-
-		//		//If in auto mode, set to the currently bound adapater...
-		//		if(autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
-		//		{
-		//			sel = i; 
-		//		}
-		//		else if(!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
-		//		{
-		//			sel = i;
-		//		}
-		//	}
-		//
-		//	if(sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
-		//	{
-		//		char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
-		//		strcpy(buf, "AUTO");
-		//		instance->configManager->UpdateSelectedAdapter(buf);
-
-		//		SendMessage(hDlg, message, wParam, lParam);
-		//		break;
-		//	}
-
-		//	if (sel == -1) 
-		//	{
-		//		sel = 0;
-		//	}
-
-		//	SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
-		//}
 
 		return (INT_PTR)TRUE;
 
@@ -1539,6 +1503,17 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 
 INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	//Basic license key alogorithm:
+	//Start with users email address
+	//Get ascii value for each character
+	//Shift along, do some other operations
+	
+	//Input key
+	//Read in
+	//Need to either do offline activation or implement server-based activation
+
+	//Once key is verified as valid, need a way to check if the program is activated
+
 	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
 	{

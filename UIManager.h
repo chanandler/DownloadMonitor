@@ -188,7 +188,7 @@ private:
 	void ShowTopConsumersToolTip(POINT pos);
 	void UpdatePosIfRequired();
 	void UpdateForDPI(HWND hWnd, RECT* newRct);
-	void InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos = false);
+	void InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos = false, int minWidth = -1);
 	bool IsOffScreen();
 	void UpdateFontScaleForDPI();
 	void UpdateBmScaleForDPI();
