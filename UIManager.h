@@ -40,7 +40,7 @@
 #define ARROW_SIZE_DIV 5
 #define MIN_ARROW_SCALE_DIV 2
 
-#define VERSION_NUMBER L"Version 0.9"
+#define VERSION_NUMBER L"Version 0.91"
 
 //Base values before any DPI scaling
 #define ROOT_INITIAL_WIDTH 220
@@ -116,6 +116,8 @@ public:
 	static UIManager* instance;
 	static class NetworkManager* netManager;
 	static class ConfigManager* configManager;
+	static class ActivationManager* activationManager;
+	static class ThemeManager* themeManager;
 
 	UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow);
 
@@ -199,15 +201,18 @@ private:
 	void OnSelectMonitorItem(int sel);
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+	static LRESULT ThemeListProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);
 	static INT_PTR OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR ThemesProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort);
 	void ForceRepaint();
+	void ForceRepaintOnRect(HWND hWnd);
 	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };
 

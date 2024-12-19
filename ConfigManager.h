@@ -86,6 +86,8 @@ public:
 
 	void GetFullConfigPath(char* buf);
 
+	void ApplyTheme(class Theme* newTheme);
+
 	COLORREF* foregroundColour;
 	COLORREF* childColour;
 

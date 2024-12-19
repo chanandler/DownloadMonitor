@@ -1,4 +1,5 @@
 #include "ConfigManager.h"
+#include "ThemeManager.h"
 #include <iostream>
 #include <fstream> 
 #include <string>
@@ -17,6 +18,7 @@ ConfigManager::ConfigManager(LPWSTR configDirOverride)
 	childColour = (COLORREF*)malloc(sizeof(COLORREF));
 	uploadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
 	downloadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
+	currentFont = (LOGFONT*)malloc(sizeof(LOGFONT));
 	uniqueAddr = (char*)malloc(sizeof(char) * 32);
 
 	if (configDirOverride)
@@ -90,17 +92,8 @@ void ConfigManager::UpdateWindowPos(int x, int y)
 
 void ConfigManager::UpdateFont(LOGFONT f)
 {
-	if (currentFont)
-	{
-		free(currentFont);
-	}
-
-	currentFont = (LOGFONT*)malloc(sizeof(LOGFONT));
-	if (currentFont)
-	{
-		memcpy(currentFont, &f, sizeof(LOGFONT));
-		WriteData();
-	}
+	*currentFont = f;
+	WriteData();
 }
 
 void ConfigManager::UpdateOpacity(int newopacity)
@@ -114,6 +107,18 @@ void ConfigManager::GetFullConfigPath(char* buf)
 	//Either pass in override dir or use appdata
 	char* appdata = getenv("APPDATA");
 	sprintf_s(buf, MAX_PATH, "%s\\%s", configDir ? configDir : appdata, CONFIG_NAME);
+}
+
+void ConfigManager::ApplyTheme(Theme* newTheme)
+{
+	*foregroundColour = newTheme->fgColour;
+	*childColour = newTheme->bgColour;
+	*downloadTxtColour = newTheme->downloadTxtColour;
+	*uploadTxtColour = newTheme->uploadTxtColour;
+	opacity = newTheme->opacity;
+	*currentFont = newTheme->font;
+
+	WriteData();
 }
 
 void ConfigManager::WriteData()
@@ -260,11 +265,7 @@ bool ConfigManager::ReadData()
 				invalidCfg = true;
 				break;
 			}
-			currentFont = (LOGFONT*)malloc(sizeof(LOGFONT));
-			if (currentFont)
-			{
-				memcpy(currentFont, &font, sizeof(LOGFONT));
-			}
+			*currentFont = font;
 			++readCount;
 		}
 		else if (!strncmp(output.c_str(), UPLOAD_TXT_COLOUR, 17))

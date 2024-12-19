@@ -139,6 +139,7 @@
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ConfigManager.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="ThemeManager.h" />
     <ClInclude Include="UIManager.h" />
   </ItemGroup>
   <ItemGroup>
@@ -146,6 +147,7 @@
     <ClCompile Include="DownloadApp.cpp" />
     <ClCompile Include="NetworkManager.cpp" />
     <ClCompile Include="ConfigManager.cpp" />
+    <ClCompile Include="ThemeManager.cpp" />
     <ClCompile Include="UIManager.cpp" />
   </ItemGroup>
   <ItemGroup>

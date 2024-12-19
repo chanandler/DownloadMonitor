@@ -27,6 +27,7 @@
 #define IDC_OPACITY_FIELD               108
 #define IDC_OPACITY_SLIDER              108
 #define IDD_ACTIVATE                    108
+#define IDC_THEMES                      108
 #define IDC_NAME                        109
 #define IDC_DOWNLOAD_APP                109
 #define IDD_THEMES                      109
@@ -56,6 +57,8 @@
 #define IDC_ACTIVATION_SETTINGS         1020
 #define IDC_LIST1                       1021
 #define IDC_LIST2                       1022
+#define IDC_THEMES_LIST                 1022
+#define IDC_LIST4                       1026
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -65,7 +68,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1023
+#define _APS_NEXT_CONTROL_VALUE         1029
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
