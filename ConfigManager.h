@@ -68,7 +68,7 @@ public:
 	void ResetConfig();
 	bool ReadData();
 
-	ConfigManager(LPWSTR configDirOverride);
+	ConfigManager(LPWSTR configDirOverride, class ThemeManager* themeManager);
 	~ConfigManager();
 	void UpdateSelectedAdapter(char* selAdapterPhysAddr);
 	void UpdateForegroundColour(COLORREF fg_col);
@@ -97,5 +97,7 @@ public:
 	COLORREF* customColBuf;
 
 	LOGFONT* currentFont;
+
+	class ThemeManager* themeManagerRef;
 };
 

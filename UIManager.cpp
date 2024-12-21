@@ -26,9 +26,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 
 	instance = this;
 	netManager = new NetworkManager();
-	configManager = new ConfigManager(lpCmdLine);
 	activationManager = new ActivationManager();
 	themeManager = new ThemeManager();
+	configManager = new ConfigManager(lpCmdLine, themeManager);
 
 	if (!configManager->ReadData()) //If init failed, kill program
 	{
@@ -1216,6 +1216,14 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 	{
 		case WM_INITDIALOG:
 		{
+			RECT dlgRc{ 0 };
+			RECT rootRc{ 0 };
+			GetWindowRect(hDlg, &dlgRc);
+			GetWindowRect(instance->roothWnd, &rootRc);
+
+			//Move underneath root window
+			SetWindowPos(hDlg, NULL, dlgRc.left, rootRc.bottom + 20, NULL, NULL, SWP_NOSIZE | SWP_NOZORDER);
+
 			instance->settingsWnd = hDlg;
 #ifdef USE_ACTIVATION
 			HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
@@ -1610,14 +1618,18 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				//Get available themes
 				Theme* slateGrey = themeManager->GetTheme(AVAILABLE_THEME::SLATE_GREY);
 				Theme* sunny = themeManager->GetTheme(AVAILABLE_THEME::SUNNY);
+				Theme* nightRider = themeManager->GetTheme(AVAILABLE_THEME::NIGHT_RIDER);
+				Theme* iceCool = themeManager->GetTheme(AVAILABLE_THEME::ICE_COOL);
 
 				allThemes.push_back(slateGrey);
 				allThemes.push_back(sunny);
+				allThemes.push_back(nightRider);
+				allThemes.push_back(iceCool);
 
 				for (int i = 0; i < allThemes.size(); i++)
 				{
 					LVITEM lvI = { 0 };
-					lvI.mask = LVIF_TEXT | LVIF_IMAGE | LVIF_PARAM;
+					lvI.mask = LVIF_TEXT | LVIF_PARAM;
 					lvI.iItem = i;
 					lvI.iImage = i;
 					lvI.lParam = (LPARAM)allThemes[i];

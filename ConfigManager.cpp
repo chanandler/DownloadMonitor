@@ -5,10 +5,9 @@
 #include <string>
 #include <tchar.h>
 
-const char* defaultConfig = "FOREGROUND_COLOUR=245,242,109\nCHILD_COLOUR=252,248,200\nLAST_POS=1200,0\nOPACITY=230\nFONT=-13,0,0,0,700,0,0,0,0,1,2,1,34,System\nUPLOAD_TXT_COLOUR=0,215,54\nDOWNLOAD_TXT_COLOUR=255,0,0\nSELECTED_ADAPTER=AUTO";
-
-ConfigManager::ConfigManager(LPWSTR configDirOverride)
+ConfigManager::ConfigManager(LPWSTR configDirOverride, ThemeManager* themeManager)
 {
+	themeManagerRef = themeManager;
 	customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
 	if (customColBuf) 
 	{
@@ -617,6 +616,11 @@ void ConfigManager::ResetConfig()
 
 void ConfigManager::InitDefaults()
 {
+	//Instead of writing a default config, we now
+	//just set important variables then apply a default theme, as this will
+	//init everything we need for a new cfg
+
+	/*
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 
@@ -624,7 +628,15 @@ void ConfigManager::InitDefaults()
 
 	newConfigFile << defaultConfig;
 
-	newConfigFile.close();
+	newConfigFile.close();*/
+
+	lastX = 1200;
+	strcpy_s(uniqueAddr, 32, "AUTO");
+
+	if(themeManagerRef)
+	{
+		ApplyTheme(themeManagerRef->GetTheme(AVAILABLE_THEME::SLATE_GREY));
+	}
 }
 
 void ConfigManager::CopyRange(char* start, char* end, char* buf, int size)
