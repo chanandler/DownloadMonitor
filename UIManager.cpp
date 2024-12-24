@@ -1225,8 +1225,12 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			SetWindowPos(hDlg, NULL, dlgRc.left, rootRc.bottom + 20, NULL, NULL, SWP_NOSIZE | SWP_NOZORDER);
 
 			instance->settingsWnd = hDlg;
-#ifdef USE_ACTIVATION
 			HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
+
+
+#ifdef USE_ACTIVATION 
+			ShowWindow(activateBtn, TRUE);
+#else
 			ShowWindow(activateBtn, FALSE);
 #endif
 
@@ -1582,9 +1586,14 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 	{
 		case WM_INITDIALOG:
 		{
+			instance->activationManager->GetActivationState();
 			return (INT_PTR)TRUE;
 		}
 		case WM_COMMAND:
+			if (LOWORD(wParam) == IDC_ACTIVATE) 
+			{
+				instance->activationManager->SetActivationState(ACTIVATION_STATE::ACTIVATED);
+			}
 			if (LOWORD(wParam) == IDOK)
 			{
 				EndDialog(hDlg, LOWORD(wParam));
