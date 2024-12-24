@@ -92,6 +92,8 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
 
+	//instance->activationManager->GenerateKey();
+
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();
 
@@ -393,7 +395,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	DWORD currentStyle = GetWindowLong(hWnd, GWL_STYLE);
 
-	SetWindowLong(hWnd, GWL_STYLE, (currentStyle & ~WS_MAXIMIZEBOX & ~WS_MINIMIZEBOX));
+	SetWindowLongPtr(hWnd, GWL_STYLE, (currentStyle & ~WS_MAXIMIZEBOX & ~WS_MINIMIZEBOX));
 
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
@@ -728,11 +730,11 @@ LRESULT UIManager::ThemeListProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		}
 		case WM_NOTIFY:
 		{
-		case NM_DBLCLK: 
+		case NM_DBLCLK:
 		{
 			LPNMITEMACTIVATE selData = (LPNMITEMACTIVATE)lParam;
 			int sel = ListView_GetNextItem(hWnd, -1, LVNI_FOCUSED);
-			if(sel == -1)
+			if (sel == -1)
 			{
 				break;
 			}
@@ -997,7 +999,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	HWND lvHeader = ListView_GetHeader(popup);
 
 	DWORD currentStyle = GetWindowLong(lvHeader, GWL_STYLE);
-	SetWindowLong(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
+	SetWindowLongPtr(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
 
 	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
 
@@ -1570,41 +1572,84 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 
 INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	//Basic license key alogorithm:
-	//Start with users email address
-	//Get ascii value for each character
-	//Shift along, do some other operations
-
-	//Input key
-	//Read in
-	//Need to either do offline activation or implement server-based activation
-
-	//Once key is verified as valid, need a way to check if the program is activated
-
 	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
 	{
+		case WM_REFRESHACTIVATIONSTATUS:
+		{
+			HWND lKeyInput = GetDlgItem(hDlg, IDC_LICENSE_KEY);
+			HWND aStatusText = GetDlgItem(hDlg, IDC_ACTIVATION_STATUS);
+			HWND aButton = GetDlgItem(hDlg, IDC_ACTIVATE);
+
+			ACTIVATION_STATE aState = instance->activationManager->GetActivationState();
+
+			switch (aState)
+			{
+				case ACTIVATION_STATE::ACTIVATED:
+				{
+					SetWindowText(aStatusText, L"Status: Activated");
+					ShowWindow(lKeyInput, FALSE);
+					ShowWindow(aButton, FALSE);
+					break;
+				}
+				case ACTIVATION_STATE::UNREGISTERED:
+				{
+					SetWindowText(aStatusText, L"Status: Unregistered");
+					break;
+				}
+			}
+			break;
+		}
 		case WM_INITDIALOG:
 		{
-			instance->activationManager->GetActivationState();
+			HWND lKeyInput = GetDlgItem(hDlg, IDC_LICENSE_KEY);
+
+			//Restrict to numerical input only
+			DWORD currentStyle = GetWindowLong(lKeyInput, GWL_STYLE);
+			SetWindowLongPtr(lKeyInput, GWL_STYLE, (currentStyle | ES_NUMBER));
+
+			SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
 			return (INT_PTR)TRUE;
 		}
 		case WM_COMMAND:
-			if (LOWORD(wParam) == IDC_ACTIVATE) 
+		{
+			if (LOWORD(wParam) == IDC_ACTIVATE)
 			{
-				instance->activationManager->SetActivationState(ACTIVATION_STATE::ACTIVATED);
+				HWND lKeyInput = GetDlgItem(hDlg, IDC_LICENSE_KEY);
+				int lTextLen = GetWindowTextLength(lKeyInput) + 1;
+
+				WCHAR* buf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
+				if (buf)
+				{
+					GetWindowText(lKeyInput, buf, lTextLen);
+					int inputLen = wcslen(buf);
+					if (inputLen > KEY_SIZE || inputLen <= 0  || inputLen < KEY_SIZE)
+					{
+						//Invalid key
+						break;
+					}
+
+					int keyArr[KEY_SIZE];
+					for (int i = 0; i < inputLen; i++)
+					{
+						WCHAR c = buf[i];
+						keyArr[i] = _wtoi(&c);
+					}
+
+					instance->activationManager->TryActivate(keyArr);
+
+					free(buf);
+				}
+
+				SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
 			}
-			if (LOWORD(wParam) == IDOK)
-			{
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			if (LOWORD(wParam) == IDCANCEL)
+			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
 			{
 				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
 			}
 			break;
+		}
 	}
 	return (INT_PTR)FALSE;
 }

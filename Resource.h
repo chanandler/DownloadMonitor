@@ -60,6 +60,7 @@
 #define IDC_THEMES_LIST                 1022
 #define IDC_LIST4                       1026
 #define IDC_ACTIVATION_STATUS           1029
+#define IDC_IPADDRESS2                  1030
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -69,7 +70,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1030
+#define _APS_NEXT_CONTROL_VALUE         1031
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif
