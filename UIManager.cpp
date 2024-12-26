@@ -1651,10 +1651,19 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 				HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
 				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
 				std::vector<WCHAR*> strVec; //Store buf from each segment here
+				bool abort = false;
 				for (int i = 0; i < KEY_SIZE; i++) 
 				{
 					HWND lKeyInput = lKeyInputs[i];
-					int lTextLen = GetWindowTextLength(lKeyInput) + 1;
+					int lTextLen = GetWindowTextLength(lKeyInput);
+
+					if (lTextLen == 0)
+					{
+						abort = true;
+						break;
+					}
+
+					++lTextLen;
 
 					WCHAR* buf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
 					if (buf)
@@ -1669,23 +1678,29 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 
 				for (int i = 0; i < strVec.size(); i++)
 				{
-					keyArr[i] = _wtoi(strVec[i]);
+					if (!abort) 
+					{
+						keyArr[i] = _wtoi(strVec[i]);
+					}
 					free(strVec[i]);
 				}
 				
-
-				//Get email address to use as key
-				int lTextLen = GetWindowTextLength(emailInput) + 1;
-
-				WCHAR* emailBuf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
-				if (emailBuf)
+				if (!abort)
 				{
-					GetWindowText(emailInput, emailBuf, lTextLen);
-					instance->activationManager->TryActivate(keyArr, emailBuf);
-					free(emailBuf);
-				}
+					//Get email address to use as key
+					int lTextLen = GetWindowTextLength(emailInput) + 1;
 
-				SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
+					WCHAR* emailBuf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
+					if (emailBuf)
+					{
+						GetWindowText(emailInput, emailBuf, lTextLen);
+						instance->activationManager->TryActivate(keyArr, emailBuf);
+						free(emailBuf);
+					}
+
+					SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
+				}
+				
 				delete[] lKeyInputs;
 			}
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)

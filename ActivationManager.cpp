@@ -146,11 +146,19 @@ bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 bool ActivationManager::ValidateKey(int* key, wchar_t* prvKey)
 {
 	int uuid = GetUUIDFromStr(prvKey);
-
+	if (uuid == 0) 
+	{
+		return false;
+	}
 	int total = 0;
 	for (int i = 0; i < KEY_SIZE; i++)
 	{
 		total += key[i];
+	}
+
+	if (total == 0) 
+	{
+		return false;
 	}
 
 	return (total % uuid == 0);
@@ -159,6 +167,10 @@ bool ActivationManager::ValidateKey(int* key, wchar_t* prvKey)
 void ActivationManager::EncryptDecryptKey(int* keyArr, const wchar_t* privKey)
 {
 	int privKeyLen = wcslen(privKey);
+	if (privKeyLen == 0)
+	{
+		return;
+	}
 	for (int i = 0; i < KEY_SIZE; i++)
 	{
 		//Perform XOR encyrption using the private key
