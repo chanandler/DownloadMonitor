@@ -93,7 +93,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	mainThread.detach();
 
 #ifdef USE_ACTIVATION
-	instance->activationManager->GenerateKey();
+	instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
 #endif
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();

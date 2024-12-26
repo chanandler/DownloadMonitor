@@ -2,11 +2,19 @@
 #include "Windows.h"
 #include <time.h>
 
+//Key/Activation overview:
+//We generate a key with KEY_SIZE digits
+//All digits, when added together, create a multiple of value generated from the private key
+//This is our UUID that we check for after decrypting a key
+
+//We then encrypt the key using XOR against the user's email address
+//Meaning they need to use their email address to decrypt the key and retrieve the valid UUID
+
 ACTIVATION_STATE ActivationManager::GetActivationState()
 {
 	HKEY kHandle = { 0 };
 
-	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, L"SOFTWARE\\Download Monitor\\CurrentStatus", NULL,
+	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_PATH, NULL,
 		KEY_READ, &kHandle);
 
 	if (kRes != ERROR_SUCCESS || kHandle == NULL)
@@ -20,7 +28,7 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	DWORD* bSize = new DWORD();
 	*bSize = sizeof(int);
 
-	LSTATUS vRes = RegQueryValueEx(kHandle, L"AStatus", NULL, NULL, (LPBYTE)aStatus, bSize);
+	LSTATUS vRes = RegQueryValueEx(kHandle, A_STATUS, NULL, NULL, (LPBYTE)aStatus, bSize);
 
 	ACTIVATION_STATE ret = (ACTIVATION_STATE)*aStatus;
 
@@ -35,7 +43,7 @@ void ActivationManager::SetActivationState(ACTIVATION_STATE newState)
 	HKEY kHandle = { 0 };
 	//Create/open key in reg
 
-	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, L"SOFTWARE\\Download Monitor\\CurrentStatus", NULL,
+	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, REG_PATH, NULL,
 		NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS,
 		NULL, &kHandle, NULL);
 
@@ -48,22 +56,48 @@ void ActivationManager::SetActivationState(ACTIVATION_STATE newState)
 	int* ptr = new int();
 	*ptr = newState;
 
-	LRESULT vRes = RegSetValueEx(kHandle, L"AStatus", NULL, REG_DWORD, (LPBYTE)ptr, sizeof(int));
+	LRESULT vRes = RegSetValueEx(kHandle, A_STATUS, NULL, REG_DWORD, (LPBYTE)ptr, sizeof(int));
 
 	RegCloseKey(kHandle);
 	delete ptr;
 }
 
-void ActivationManager::GenerateKey()
+int ActivationManager::GetUUIDFromStr(wchar_t* str)
+{
+	int ret = 0;
+	int len = wcslen(str);
+
+	for (int i = 0; i < len; i++)
+	{
+		int val = str[i];
+		ret += val;
+	}
+
+	//Only get first two digits
+	int dCount = CountDigits(ret);
+
+	if (dCount >= 2) 
+	{
+		for(int i = 0; i < (dCount - 2); i++)
+		{
+			ret /= 10;
+		}
+	}
+
+	return ret;
+}
+
+//TODO move this to a seperate key/license program
+void ActivationManager::GenerateKey(wchar_t* prvKey)
 {
 	//Whole key should == a multiple of UUID
-	
+
 	srand((unsigned)time(NULL));
 
 	int key[KEY_SIZE] = { 0 };
-
+	int uuid = GetUUIDFromStr(prvKey);
 	int total = 0;
-	while (total == 0 || total % KEY_UUID != 0)
+	while (total == 0 || total % uuid != 0)
 	{
 		for (int i = 0; i < KEY_SIZE; i++)
 		{
@@ -72,7 +106,7 @@ void ActivationManager::GenerateKey()
 			//Add all digits together
 			for (int j = 0; j < KEY_SIZE; j++)
 			{
-				if (j == i) 
+				if (j == i)
 				{
 					continue;
 				}
@@ -92,15 +126,15 @@ void ActivationManager::GenerateKey()
 		}
 	}
 
-	EncryptDecryptKey(&key[0], L"MyPrivateKey");
-	//int v = key[0];
+	EncryptDecryptKey(&key[0], prvKey);
+	int v = key[0];
 }
 
 bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 {
 	EncryptDecryptKey(&key[0], prvKey);
 
-	if (!ValidateKey(key))
+	if (!ValidateKey(key, prvKey))
 	{
 		return false;
 	}
@@ -109,15 +143,17 @@ bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 	return true;
 }
 
-bool ActivationManager::ValidateKey(int* key)
+bool ActivationManager::ValidateKey(int* key, wchar_t* prvKey)
 {
+	int uuid = GetUUIDFromStr(prvKey);
+
 	int total = 0;
 	for (int i = 0; i < KEY_SIZE; i++)
 	{
 		total += key[i];
 	}
 
-	return (total % KEY_UUID == 0);
+	return (total % uuid == 0);
 }
 
 void ActivationManager::EncryptDecryptKey(int* keyArr, const wchar_t* privKey)
@@ -134,7 +170,7 @@ int ActivationManager::CountDigits(int val)
 {
 	int ret = 0;
 
-	while(val != 0)
+	while (val != 0)
 	{
 		val /= 10;
 		++ret;
@@ -142,8 +178,3 @@ int ActivationManager::CountDigits(int val)
 
 	return ret;
 }
-
-//Need to keep each digit single
-//How to encode 
-//AKey
-//1239
