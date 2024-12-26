@@ -212,6 +212,7 @@ private:
 	static INT_PTR ThemesProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	HWND* GetLicenseKeyArray(HWND hDlg);
 	static INT_PTR PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort);
 	void ForceRepaint();
 	void ForceRepaintOnRect(HWND hWnd);

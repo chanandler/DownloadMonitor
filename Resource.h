@@ -53,14 +53,20 @@
 #define IDC_RESET_CONFIG                1009
 #define IDC_ACTIVATE                    1010
 #define IDC_LICENSE_KEY                 1018
+#define IDC_LICENSE_KEY1                1018
 #define IDC_IPADDRESS1                  1019
+#define IDC_LICENSE_KEY2                1019
 #define IDC_ACTIVATION_SETTINGS         1020
+#define IDC_LICENSE_KEY3                1020
 #define IDC_LIST1                       1021
+#define IDC_LICENSE_KEY4                1021
 #define IDC_LIST2                       1022
 #define IDC_THEMES_LIST                 1022
+#define IDC_LICENSE_KEY5                1022
+#define IDC_LICENSE_KEY6                1023
+#define IDC_EMAIL_ADDRESS               1023
 #define IDC_LIST4                       1026
 #define IDC_ACTIVATION_STATUS           1029
-#define IDC_IPADDRESS2                  1030
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

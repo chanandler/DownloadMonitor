@@ -92,8 +92,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
 
-	//instance->activationManager->GenerateKey();
-
+#ifdef USE_ACTIVATION
+	instance->activationManager->GenerateKey();
+#endif
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();
 
@@ -1570,6 +1571,17 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 	return (INT_PTR)FALSE;
 }
 
+HWND* UIManager::GetLicenseKeyArray(HWND hDlg)
+{
+	HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
+	HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
+	HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
+	HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
+	HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
+
+	return new HWND[KEY_SIZE]{ lKeyInput1 , lKeyInput2, lKeyInput3, lKeyInput4, lKeyInput5 };
+}
+
 INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
@@ -1577,7 +1589,17 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 	{
 		case WM_REFRESHACTIVATIONSTATUS:
 		{
-			HWND lKeyInput = GetDlgItem(hDlg, IDC_LICENSE_KEY);
+
+			//HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
+			//HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
+			//HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
+			//HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
+			//HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
+
+			//HWND* lKeyInputs[5] = { &lKeyInput1 , &lKeyInput2, &lKeyInput3, &lKeyInput4, &lKeyInput5 };
+
+			HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
+			HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
 			HWND aStatusText = GetDlgItem(hDlg, IDC_ACTIVATION_STATUS);
 			HWND aButton = GetDlgItem(hDlg, IDC_ACTIVATE);
 
@@ -1588,8 +1610,13 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 				case ACTIVATION_STATE::ACTIVATED:
 				{
 					SetWindowText(aStatusText, L"Status: Activated");
-					ShowWindow(lKeyInput, FALSE);
+
+					for (int i = 0; i < KEY_SIZE; i++)
+					{
+						ShowWindow(lKeyInputs[i], FALSE);
+					}
 					ShowWindow(aButton, FALSE);
+					ShowWindow(emailInput, FALSE);
 					break;
 				}
 				case ACTIVATION_STATE::UNREGISTERED:
@@ -1599,15 +1626,21 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 				}
 			}
 			break;
+
+			delete[] lKeyInputs;
 		}
 		case WM_INITDIALOG:
 		{
-			HWND lKeyInput = GetDlgItem(hDlg, IDC_LICENSE_KEY);
+			HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
 
-			//Restrict to numerical input only
-			DWORD currentStyle = GetWindowLong(lKeyInput, GWL_STYLE);
-			SetWindowLongPtr(lKeyInput, GWL_STYLE, (currentStyle | ES_NUMBER));
+			for (int i = 0; i < KEY_SIZE; i++)
+			{
+				//Restrict to numerical input only
+				DWORD currentStyle = GetWindowLong(lKeyInputs[i], GWL_STYLE);
+				SetWindowLongPtr(lKeyInputs[i], GWL_STYLE, (currentStyle | ES_NUMBER));
+			}
 
+			delete[] lKeyInputs;
 			SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
 			return (INT_PTR)TRUE;
 		}
@@ -1615,33 +1648,45 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 		{
 			if (LOWORD(wParam) == IDC_ACTIVATE)
 			{
-				HWND lKeyInput = GetDlgItem(hDlg, IDC_LICENSE_KEY);
-				int lTextLen = GetWindowTextLength(lKeyInput) + 1;
-
-				WCHAR* buf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
-				if (buf)
+				HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
+				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
+				std::vector<WCHAR*> strVec; //Store buf from each segment here
+				for (int i = 0; i < KEY_SIZE; i++) 
 				{
-					GetWindowText(lKeyInput, buf, lTextLen);
-					int inputLen = wcslen(buf);
-					if (inputLen > KEY_SIZE || inputLen <= 0  || inputLen < KEY_SIZE)
+					HWND lKeyInput = lKeyInputs[i];
+					int lTextLen = GetWindowTextLength(lKeyInput) + 1;
+
+					WCHAR* buf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
+					if (buf)
 					{
-						//Invalid key
-						break;
+						GetWindowText(lKeyInput, buf, lTextLen);
+
+						strVec.push_back(buf);
 					}
+				}
 
-					int keyArr[KEY_SIZE];
-					for (int i = 0; i < inputLen; i++)
-					{
-						WCHAR c = buf[i];
-						keyArr[i] = _wtoi(&c);
-					}
+				int keyArr[KEY_SIZE];
 
-					instance->activationManager->TryActivate(keyArr);
+				for (int i = 0; i < strVec.size(); i++)
+				{
+					keyArr[i] = _wtoi(strVec[i]);
+					free(strVec[i]);
+				}
+				
 
-					free(buf);
+				//Get email address to use as key
+				int lTextLen = GetWindowTextLength(emailInput) + 1;
+
+				WCHAR* emailBuf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
+				if (emailBuf)
+				{
+					GetWindowText(emailInput, emailBuf, lTextLen);
+					instance->activationManager->TryActivate(keyArr, emailBuf);
+					free(emailBuf);
 				}
 
 				SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
+				delete[] lKeyInputs;
 			}
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
 			{

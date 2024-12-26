@@ -79,8 +79,8 @@ void ActivationManager::GenerateKey()
 				total += key[j];
 			}
 
-			//Add random value between 1>9
-			int rVal = rand() % 10;
+			//Add random value between 1>20
+			int rVal = rand() % 21;
 			if (rVal == 0)
 			{
 				++rVal;
@@ -92,19 +92,13 @@ void ActivationManager::GenerateKey()
 		}
 	}
 
-
-
 	EncryptDecryptKey(&key[0], L"MyPrivateKey");
-
-	//EncryptDecryptKey(&key[0], L"MyPrivateKey");
-	int v = key[0];
-
-	//bool isValid = ValidateKey(&key[0]);
+	//int v = key[0];
 }
 
-bool ActivationManager::TryActivate(int* key)
+bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 {
-	EncryptDecryptKey(&key[0], L"MyPrivateKey");
+	EncryptDecryptKey(&key[0], prvKey);
 
 	if (!ValidateKey(key))
 	{
@@ -123,7 +117,7 @@ bool ActivationManager::ValidateKey(int* key)
 		total += key[i];
 	}
 
-	return (total % KEY_UUID);
+	return (total % KEY_UUID == 0);
 }
 
 void ActivationManager::EncryptDecryptKey(int* keyArr, const wchar_t* privKey)
@@ -135,3 +129,21 @@ void ActivationManager::EncryptDecryptKey(int* keyArr, const wchar_t* privKey)
 		keyArr[i] ^= privKey[i % privKeyLen];
 	}
 }
+
+int ActivationManager::CountDigits(int val)
+{
+	int ret = 0;
+
+	while(val != 0)
+	{
+		val /= 10;
+		++ret;
+	}
+
+	return ret;
+}
+
+//Need to keep each digit single
+//How to encode 
+//AKey
+//1239
