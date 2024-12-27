@@ -14,7 +14,7 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 {
 	HKEY kHandle = { 0 };
 
-	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_PATH, NULL,
+	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
 		KEY_READ, &kHandle);
 
 	if (kRes != ERROR_SUCCESS || kHandle == NULL)
@@ -22,6 +22,12 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 		//Key not present, init to unregistered
 		SetActivationState(ACTIVATION_STATE::UNREGISTERED);
 		return ACTIVATION_STATE::UNREGISTERED;
+	}
+
+	//The value for activation status has been modified at a time different to when we last modified it
+	if(!CompareWriteTimes())
+	{
+		return ACTIVATION_STATE::BYPASS_DETECT;
 	}
 
 	int* aStatus = new int();
@@ -43,7 +49,7 @@ void ActivationManager::SetActivationState(ACTIVATION_STATE newState)
 	HKEY kHandle = { 0 };
 	//Create/open key in reg
 
-	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, REG_PATH, NULL,
+	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
 		NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS,
 		NULL, &kHandle, NULL);
 
@@ -59,9 +65,184 @@ void ActivationManager::SetActivationState(ACTIVATION_STATE newState)
 	LRESULT vRes = RegSetValueEx(kHandle, A_STATUS, NULL, REG_DWORD, (LPBYTE)ptr, sizeof(int));
 
 	RegCloseKey(kHandle);
+
+	WriteLastModifiedTime();
+
 	delete ptr;
 }
 
+void ActivationManager::WriteLastModifiedTime()
+{
+	//Sneaky way to store the last write time on the user's PC
+
+	HKEY kHandle = { 0 };
+
+	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, REG_TIME_PATH, NULL,
+		NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS,
+		NULL, &kHandle, NULL);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return;
+	}
+
+	//Get last write time of key
+	SYSTEMTIME st = GetStatusKeyWriteTime();
+
+	//Place into a string
+	WCHAR buf[250];
+	wsprintf(buf, L"%02d, %02d, %02d, %02d, %02d, %02d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+	//Encode
+	EncryptDecryptString(&buf[0], APP_NAME);
+	
+	//Write
+	LRESULT vRes = RegSetValueEx(kHandle, C_DATA, NULL, REG_SZ, (LPBYTE)&buf, 250);
+
+	RegCloseKey(kHandle);
+}
+
+void ActivationManager::CopyRange(wchar_t* strt, wchar_t* end, wchar_t* dst)
+{
+	if (!strt || !end || !dst)
+	{
+		return;
+	}
+
+	while(strt != end)
+	{
+		*dst = *strt;
+		++strt;
+		++dst;
+	}
+
+	*dst = 0;
+}
+
+bool ActivationManager::CompareWriteTimes()
+{
+	//Retrieve expected last write time, compare with actual last write time
+	HKEY kHandle = { 0 };
+
+	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, REG_TIME_PATH, NULL,
+		NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS,
+		NULL, &kHandle, NULL);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return false;
+	}
+
+	WCHAR buf[250]; //Contains our saved last write time
+
+	DWORD* bSize = new DWORD();
+	*bSize = 250;
+	LSTATUS vRes = RegQueryValueEx(kHandle, C_DATA, NULL, NULL, (LPBYTE)&buf[0], bSize);
+
+	if (vRes != ERROR_SUCCESS)
+	{
+		return false; //No write data, if this is false but we have an activation key then something has been modified
+	}
+
+	EncryptDecryptString(&buf[0], APP_NAME);
+
+	RegCloseKey(kHandle);
+
+	//Construct into new SYSTEMTIME structure
+
+	TIME_VALUE tVal = TIME_VALUE::YEAR;
+
+
+	WCHAR* strt = &buf[0];
+	WCHAR* end = wcschr(strt, L',');
+
+	SYSTEMTIME prevSt = { 0 };
+	bool done = false;
+	while(strt && end && !done)
+	{	
+		WCHAR tempBuf[100];
+		CopyRange(strt, end, tempBuf);
+
+		strt = end + 1;
+
+		
+		switch (tVal)
+		{
+			case YEAR:
+				prevSt.wYear = _wtoi(tempBuf);
+				tVal = TIME_VALUE::MONTH;
+				break;
+			case MONTH:
+				prevSt.wMonth = _wtoi(tempBuf);
+				tVal = TIME_VALUE::DAY;
+				break;
+			case DAY:
+				prevSt.wDay = _wtoi(tempBuf);
+				tVal = TIME_VALUE::HOUR;
+				break;
+			case HOUR:
+				prevSt.wHour = _wtoi(tempBuf);
+				tVal = TIME_VALUE::MINUTE;
+				break;
+			case MINUTE:
+				prevSt.wMinute = _wtoi(tempBuf);
+				tVal = TIME_VALUE::SECOND;
+				break;
+			case SECOND:
+				prevSt.wSecond = _wtoi(tempBuf);
+				done = true;
+				break;
+		}
+
+		if (tVal != TIME_VALUE::SECOND)
+		{
+			end = wcschr(strt, L',');
+		}
+		else
+		{
+			end = &buf[249];
+		}
+	}
+
+	//Query actual key
+	
+	SYSTEMTIME st = GetStatusKeyWriteTime();
+
+	if(prevSt.wYear == st.wYear && prevSt.wMonth == st.wMonth && prevSt.wDay == st.wDay && prevSt.wHour == st.wHour
+		&& prevSt.wMinute == st.wMinute && prevSt.wSecond == st.wSecond)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+SYSTEMTIME ActivationManager::GetStatusKeyWriteTime()
+{
+	HKEY kHandle = { 0 };
+	SYSTEMTIME ret = { 0 };
+
+	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+		KEY_READ, &kHandle);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return ret;
+	}
+
+	FILETIME ft = { 0 };
+
+	RegQueryInfoKey(kHandle, NULL, NULL, NULL,
+		NULL, NULL, NULL, NULL, NULL,
+		NULL, NULL, &ft);
+
+	RegCloseKey(kHandle);
+
+	FileTimeToSystemTime(&ft, &ret);
+
+	return ret;
+}
+	
 int ActivationManager::GetUUIDFromStr(wchar_t* str)
 {
 	int ret = 0;
@@ -175,6 +356,21 @@ void ActivationManager::EncryptDecryptKey(int* keyArr, const wchar_t* privKey)
 	{
 		//Perform XOR encyrption using the private key
 		keyArr[i] ^= privKey[i % privKeyLen];
+	}
+}
+
+void ActivationManager::EncryptDecryptString(wchar_t* str, const wchar_t* privKey)
+{
+	int privKeyLen = wcslen(privKey);
+	int strLen = wcslen(str);
+	if (privKeyLen == 0 || strLen == 0)
+	{
+		return;
+	}
+	for (int i = 0; i < strLen; i++)
+	{
+		//Perform XOR encyrption using the private key
+		str[i] ^= privKey[i % privKeyLen];
 	}
 }
 
