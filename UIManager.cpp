@@ -1635,8 +1635,10 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 
 			for (int i = 0; i < KEY_SIZE; i++)
 			{
+				
 				//Restrict to numerical input only
 				DWORD currentStyle = GetWindowLong(lKeyInputs[i], GWL_STYLE);
+				
 				SetWindowLongPtr(lKeyInputs[i], GWL_STYLE, (currentStyle | ES_NUMBER));
 			}
 
