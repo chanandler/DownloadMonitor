@@ -41,7 +41,7 @@ public:
 	bool TryActivate(int* key, wchar_t* prvKey);
 	bool ValidateKey(int* key, wchar_t* prvKey);
 	void GenerateKey(wchar_t* prvKey);
-
+	int GetRemainingTrialDays();
 private:
 	SYSTEMTIME WCharToSystemTime(WCHAR* buf, int bufSiz);
 	int GetUUIDFromStr(wchar_t* str);

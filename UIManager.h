@@ -204,6 +204,7 @@ private:
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	static LRESULT PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
 	static LRESULT ThemeListProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+	static INT_PTR TrialExpiredProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);

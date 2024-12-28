@@ -36,12 +36,45 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		exit(-1);
 		return;
 	}
-	if(activationManager->GetActivationState() == ACTIVATION_STATE::BYPASS_DETECT)
+
+#ifdef USE_ACTIVATION
+	ACTIVATION_STATE activationState = activationManager->GetActivationState();
+
+	switch (activationState)
 	{
-		MessageBox(NULL, L"Activation bypass detected! Program will now exit", L"ActivationManager", MB_OK);
-		exit(-1);
-		return;
+		case ACTIVATION_STATE::UNREGISTERED:
+		{
+			
+			int remDays = activationManager->GetRemainingTrialDays();
+
+			WCHAR buf[250];
+			swprintf_s(buf, L"DownloadMonitor is not free software. You have %i days of free trial remaining", remDays);
+
+			MessageBox(NULL, buf, L"ActivationManager", MB_OK | MB_ICONINFORMATION);
+			break;
+		}
+		case ACTIVATION_STATE::BYPASS_DETECT:
+		{
+			MessageBox(NULL, L"Activation bypass detected! Program will now exit", L"ActivationManager", MB_OK | MB_ICONHAND);
+			exit(-1);
+			return;
+		}
+		case ACTIVATION_STATE::TRIAL_EXPIRED:
+		{
+			DialogBox(hInstance, MAKEINTRESOURCE(IDD_TRIAL_EXPIRED), NULL, TrialExpiredProc);
+			if(activationManager->GetActivationState() != ACTIVATION_STATE::ACTIVATED)
+			{
+				//The user did not activate the program
+				exit(-1);
+				return;
+			}
+
+			MessageBox(NULL, L"Thank you for activating DownloadMonitor", L"ActivationManager", MB_OK);
+
+			break;
+		}
 	}
+#endif
 
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
@@ -99,7 +132,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	mainThread.detach();
 
 #ifdef USE_ACTIVATION
-	instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
+	//instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
 #endif
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();
@@ -1192,6 +1225,29 @@ void UIManager::TryElevate()
 	SendMessage(roothWnd, WM_CLOSE, NULL, NULL); //Shut down this instance
 }
 
+INT_PTR CALLBACK UIManager::TrialExpiredProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+		case WM_INITDIALOG:
+		{
+			return (INT_PTR)TRUE;
+		}
+		case WM_COMMAND:
+			if (LOWORD(wParam) == IDACTIVATE || LOWORD(wParam) == IDCANCEL)
+			{
+				if (LOWORD(wParam) == IDACTIVATE) 
+				{
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), NULL, ActivationProc);
+				}
+				EndDialog(hDlg, LOWORD(wParam));
+				return (INT_PTR)TRUE;
+			}
+			break;
+	}
+	return (INT_PTR)FALSE;
+}
 INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
@@ -1411,7 +1467,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 			}
 			break;
-	}
+}
 	return (INT_PTR)FALSE;
 }
 
@@ -1509,7 +1565,7 @@ INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			}
 			else if (LOWORD(wParam) == IDC_FONT)
 			{
-				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_FONT_WARNING), hDlg, FontWarningProc);
+				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_FONT_WARNING_NEW), hDlg, FontWarningProc);
 			}
 			else if (LOWORD(wParam) == IDC_UPLOAD_COL || LOWORD(wParam) == IDC_DOWNLOAD_COL)
 			{
@@ -1630,6 +1686,16 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 					SetWindowText(aStatusText, L"Status: Unregistered");
 					break;
 				}
+				case ACTIVATION_STATE::TRIAL_EXPIRED:
+				{
+					SetWindowText(aStatusText, L"Status: Trial expired");
+					break;
+				}
+				case ACTIVATION_STATE::BYPASS_DETECT:
+				{
+					SetWindowText(aStatusText, L"Status: Bypass detected");
+					break;
+				}
 			}
 			break;
 
@@ -1641,10 +1707,10 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 
 			for (int i = 0; i < KEY_SIZE; i++)
 			{
-				
+
 				//Restrict to numerical input only
 				DWORD currentStyle = GetWindowLong(lKeyInputs[i], GWL_STYLE);
-				
+
 				SetWindowLongPtr(lKeyInputs[i], GWL_STYLE, (currentStyle | ES_NUMBER));
 			}
 
@@ -1660,7 +1726,7 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
 				std::vector<WCHAR*> strVec; //Store buf from each segment here
 				bool abort = false;
-				for (int i = 0; i < KEY_SIZE; i++) 
+				for (int i = 0; i < KEY_SIZE; i++)
 				{
 					HWND lKeyInput = lKeyInputs[i];
 					int lTextLen = GetWindowTextLength(lKeyInput);
@@ -1686,13 +1752,13 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 
 				for (int i = 0; i < strVec.size(); i++)
 				{
-					if (!abort) 
+					if (!abort)
 					{
 						keyArr[i] = _wtoi(strVec[i]);
 					}
 					free(strVec[i]);
 				}
-				
+
 				if (!abort)
 				{
 					//Get email address to use as key
@@ -1708,7 +1774,7 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 
 					SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
 				}
-				
+
 				delete[] lKeyInputs;
 			}
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)

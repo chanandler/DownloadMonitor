@@ -20,6 +20,7 @@
 #define IDD_OPACITY1                    106
 #define IDD_INVALID_INPUT               106
 #define IDD_FONT_WARNING                106
+#define IDD_TRIAL_EXPIRED               106
 #define IDI_NAME                        107
 #define IDC_RESET_COLOURS               107
 #define IDD_TEXT                        107
@@ -43,6 +44,7 @@
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       133
 #define IDI_LOGO                        133
+#define IDD_FONT_WARNING_NEW            133
 #define IDI_ICON2                       134
 #define IDB_BITMAP1                     136
 #define IDB_UP_ARROW                    136
@@ -67,6 +69,7 @@
 #define IDC_EMAIL_ADDRESS               1023
 #define IDC_LIST4                       1026
 #define IDC_ACTIVATION_STATUS           1029
+#define IDACTIVATE                      1031
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -76,7 +79,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1031
+#define _APS_NEXT_CONTROL_VALUE         1032
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

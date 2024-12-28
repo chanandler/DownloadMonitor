@@ -29,6 +29,15 @@ ActivationManager::ActivationManager()
 	{
 		//Key not present, init to unregistered
 		SetActivationState(ACTIVATION_STATE::UNREGISTERED);
+
+		//Now key has been added, try again
+		kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+			KEY_READ, &kHandle);
+	}
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return;
 	}
 
 	LSTATUS trialRes = RegQueryValueEx(kHandle, T_STATUS, NULL, NULL, NULL, NULL);
@@ -89,7 +98,9 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	RegCloseKey(kHandle);
 	delete aStatus, bSize;
 
-	if(ret != ACTIVATION_STATE::ACTIVATED && !TrialActive())
+	int a = GetRemainingTrialDays();
+
+	if(ret != ACTIVATION_STATE::TRIAL_EXPIRED && ret != ACTIVATION_STATE::ACTIVATED && !TrialActive())
 	{
 		SetActivationState(ACTIVATION_STATE::TRIAL_EXPIRED);
 		return ACTIVATION_STATE::TRIAL_EXPIRED;
@@ -98,7 +109,7 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	return ret;
 }
 
-bool ActivationManager::TrialActive()
+int ActivationManager::GetRemainingTrialDays()
 {
 	HKEY kHandle = { 0 };
 
@@ -118,7 +129,7 @@ bool ActivationManager::TrialActive()
 	*bSize = 250;
 	LSTATUS trialRes = RegQueryValueEx(kHandle, T_STATUS, NULL, NULL, (LPBYTE)&buf[0], bSize);
 
-	if(trialRes != ERROR_SUCCESS)
+	if (trialRes != ERROR_SUCCESS)
 	{
 		RegCloseKey(kHandle);
 		return false;
@@ -138,12 +149,13 @@ bool ActivationManager::TrialActive()
 
 	bool a = SystemTimeToFileTime(&prevSt, &prevFt);
 	bool b = SystemTimeToFileTime(&st, &ft);
-	
-	if(!a || !b)
+
+	if (!a || !b)
 	{
 		return false;
 	}
 
+	//Doing arithmetic with FILETIME directly is not recommened, so pass into a _ULARGE_INTEGER union
 	_ULARGE_INTEGER prevTime = { 0 };
 	prevTime.LowPart = prevFt.dwLowDateTime;
 	prevTime.HighPart = prevFt.dwHighDateTime;
@@ -152,9 +164,22 @@ bool ActivationManager::TrialActive()
 	time.LowPart = ft.dwLowDateTime;
 	time.HighPart = ft.dwHighDateTime;
 
-	return (time.QuadPart - prevTime.QuadPart) < (TICKS_PER_DAY * TRIAL_LENGTH_DAYS);
+	INT64 remSeconds = ((TICKS_PER_DAY * TRIAL_LENGTH_DAYS) - (time.QuadPart - prevTime.QuadPart));
+
+	if(remSeconds < 0)
+	{
+		return 0;
+	}
+
+	return ((TICKS_PER_DAY * TRIAL_LENGTH_DAYS) - (time.QuadPart - prevTime.QuadPart)) / TICKS_PER_DAY;
 }
 
+bool ActivationManager::TrialActive()
+{
+	return GetRemainingTrialDays() > 0;
+}
+
+//Expects string formatted as: Year,Month,Day,Hour,Minute,Second
 SYSTEMTIME ActivationManager::WCharToSystemTime(WCHAR* buf, int bufSiz)
 {
 	TIME_VALUE tVal = TIME_VALUE::YEAR;
@@ -323,7 +348,7 @@ bool ActivationManager::CompareWriteTimes()
 
 	//Query actual key
 	
-	SYSTEMTIME st = GetStatusKeyWriteTime();
+	SYSTEMTIME st = GetStatusKeyWriteTime(); //Get the key's modified value rather than the current time as we're comparing down to the second
 
 	if(prevSt.wYear == st.wYear && prevSt.wMonth == st.wMonth && prevSt.wDay == st.wDay && prevSt.wHour == st.wHour
 		&& prevSt.wMinute == st.wMinute && prevSt.wSecond == st.wSecond)
