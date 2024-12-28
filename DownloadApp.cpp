@@ -25,8 +25,9 @@
 
 
 //TODO:
-//Implement themes
-//Add some kind of license key systsm to copy DU meter
+//Add a 30 day trial period
+//Limit/block functionality if app is unlicensed
+//Convert configmanager to unicode
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {

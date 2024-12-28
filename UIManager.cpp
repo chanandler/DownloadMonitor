@@ -32,7 +32,13 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 
 	if (!configManager->ReadData()) //If init failed, kill program
 	{
-		MessageBox(NULL, L"Failed to initialise config, is the supplied path valid?", L"NetworkManager", MB_OK);
+		MessageBox(NULL, L"Failed to initialise config, is the supplied path valid?", L"ConfigManager", MB_OK);
+		exit(-1);
+		return;
+	}
+	if(activationManager->GetActivationState() == ACTIVATION_STATE::BYPASS_DETECT)
+	{
+		MessageBox(NULL, L"Activation bypass detected! Program will now exit", L"ActivationManager", MB_OK);
 		exit(-1);
 		return;
 	}

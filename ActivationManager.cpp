@@ -10,6 +10,53 @@
 //We then encrypt the key using XOR against the user's email address
 //Meaning they need to use their email address to decrypt the key and retrieve the valid UUID
 
+//When the activation status is set, we save the modification time to an encrypted key elsewhere
+//Then when loading the activation status later, we check the key's current time against the expected time
+
+//TODO
+//Implement trial
+//Add a way to check for all keys just being deleted, some check to see if the program has ever been run before
+
+ActivationManager::ActivationManager()
+{
+	HKEY kHandle = { 0 };
+
+	//Check activation status
+	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+		KEY_READ, &kHandle);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		//Key not present, init to unregistered
+		SetActivationState(ACTIVATION_STATE::UNREGISTERED);
+	}
+
+	LSTATUS trialRes = RegQueryValueEx(kHandle, T_STATUS, NULL, NULL, NULL, NULL);
+
+	//Init the trial value, if required
+	if (trialRes == ERROR_FILE_NOT_FOUND)
+	{
+		kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+			KEY_ALL_ACCESS, &kHandle);
+
+		if (kRes == ERROR_SUCCESS && kHandle != NULL)
+		{
+			//Encode current time and save to value
+			SYSTEMTIME st = { 0 };
+			GetSystemTime(&st);
+
+			WCHAR buf[250];
+			wsprintf(buf, L"%02d, %02d, %02d, %02d, %02d, %02d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+			EncryptDecryptString(&buf[0], APP_NAME);
+			LRESULT vRes = RegSetValueEx(kHandle, T_STATUS, NULL, REG_SZ, (LPBYTE)&buf, 250);
+			WriteLastModifiedTime();
+		}
+	}
+
+	RegCloseKey(kHandle);
+}
+	
 ACTIVATION_STATE ActivationManager::GetActivationState()
 {
 	HKEY kHandle = { 0 };
@@ -27,6 +74,7 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	//The value for activation status has been modified at a time different to when we last modified it
 	if(!CompareWriteTimes())
 	{
+		SetActivationState(ACTIVATION_STATE::BYPASS_DETECT);
 		return ACTIVATION_STATE::BYPASS_DETECT;
 	}
 
@@ -41,7 +89,127 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	RegCloseKey(kHandle);
 	delete aStatus, bSize;
 
+	if(ret != ACTIVATION_STATE::ACTIVATED && !TrialActive())
+	{
+		SetActivationState(ACTIVATION_STATE::TRIAL_EXPIRED);
+		return ACTIVATION_STATE::TRIAL_EXPIRED;
+	}
+
 	return ret;
+}
+
+bool ActivationManager::TrialActive()
+{
+	HKEY kHandle = { 0 };
+
+	//Check activation status
+	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+		KEY_READ, &kHandle);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return false;
+	}
+
+	WCHAR buf[250];
+	ZeroMemory(buf, 250);
+
+	DWORD* bSize = new DWORD();
+	*bSize = 250;
+	LSTATUS trialRes = RegQueryValueEx(kHandle, T_STATUS, NULL, NULL, (LPBYTE)&buf[0], bSize);
+
+	if(trialRes != ERROR_SUCCESS)
+	{
+		RegCloseKey(kHandle);
+		return false;
+	}
+
+	//Decrypt
+	EncryptDecryptString(&buf[0], APP_NAME);
+
+	SYSTEMTIME prevSt = WCharToSystemTime(&buf[0], 250);
+	SYSTEMTIME st = { 0 };
+	GetSystemTime(&st);
+
+	//Convert to FILETIME
+
+	FILETIME prevFt = { 0 };
+	FILETIME ft = { 0 };
+
+	bool a = SystemTimeToFileTime(&prevSt, &prevFt);
+	bool b = SystemTimeToFileTime(&st, &ft);
+	
+	if(!a || !b)
+	{
+		return false;
+	}
+
+	_ULARGE_INTEGER prevTime = { 0 };
+	prevTime.LowPart = prevFt.dwLowDateTime;
+	prevTime.HighPart = prevFt.dwHighDateTime;
+
+	_ULARGE_INTEGER time = { 0 };
+	time.LowPart = ft.dwLowDateTime;
+	time.HighPart = ft.dwHighDateTime;
+
+	return (time.QuadPart - prevTime.QuadPart) < (TICKS_PER_DAY * TRIAL_LENGTH_DAYS);
+}
+
+SYSTEMTIME ActivationManager::WCharToSystemTime(WCHAR* buf, int bufSiz)
+{
+	TIME_VALUE tVal = TIME_VALUE::YEAR;
+
+	WCHAR* strt = &buf[0];
+	WCHAR* end = wcschr(strt, L',');
+
+	SYSTEMTIME st = { 0 };
+	bool done = false;
+	while (strt && end && !done)
+	{
+		WCHAR tempBuf[250];
+		CopyRange(strt, end, tempBuf);
+
+		strt = end + 1;
+
+		switch (tVal)
+		{
+			case YEAR:
+				st.wYear = _wtoi(tempBuf);
+				tVal = TIME_VALUE::MONTH;
+				break;
+			case MONTH:
+				st.wMonth = _wtoi(tempBuf);
+				tVal = TIME_VALUE::DAY;
+				break;
+			case DAY:
+				st.wDay = _wtoi(tempBuf);
+				tVal = TIME_VALUE::HOUR;
+				break;
+			case HOUR:
+				st.wHour = _wtoi(tempBuf);
+				tVal = TIME_VALUE::MINUTE;
+				break;
+			case MINUTE:
+				st.wMinute = _wtoi(tempBuf);
+				tVal = TIME_VALUE::SECOND;
+				break;
+			case SECOND:
+				st.wSecond = _wtoi(tempBuf);
+				done = true;
+				break;
+		}
+
+		if (tVal != TIME_VALUE::SECOND)
+		{
+			end = wcschr(strt, L',');
+		}
+		else
+		{
+			end = &buf[bufSiz - 1];
+		}
+	}
+
+	return st;
 }
 
 void ActivationManager::SetActivationState(ACTIVATION_STATE newState)
@@ -134,13 +302,14 @@ bool ActivationManager::CompareWriteTimes()
 	}
 
 	WCHAR buf[250]; //Contains our saved last write time
-
+	ZeroMemory(buf, 250);
 	DWORD* bSize = new DWORD();
 	*bSize = 250;
 	LSTATUS vRes = RegQueryValueEx(kHandle, C_DATA, NULL, NULL, (LPBYTE)&buf[0], bSize);
 
 	if (vRes != ERROR_SUCCESS)
 	{
+		RegCloseKey(kHandle);
 		return false; //No write data, if this is false but we have an activation key then something has been modified
 	}
 
@@ -150,59 +319,7 @@ bool ActivationManager::CompareWriteTimes()
 
 	//Construct into new SYSTEMTIME structure
 
-	TIME_VALUE tVal = TIME_VALUE::YEAR;
-
-
-	WCHAR* strt = &buf[0];
-	WCHAR* end = wcschr(strt, L',');
-
-	SYSTEMTIME prevSt = { 0 };
-	bool done = false;
-	while(strt && end && !done)
-	{	
-		WCHAR tempBuf[100];
-		CopyRange(strt, end, tempBuf);
-
-		strt = end + 1;
-
-		
-		switch (tVal)
-		{
-			case YEAR:
-				prevSt.wYear = _wtoi(tempBuf);
-				tVal = TIME_VALUE::MONTH;
-				break;
-			case MONTH:
-				prevSt.wMonth = _wtoi(tempBuf);
-				tVal = TIME_VALUE::DAY;
-				break;
-			case DAY:
-				prevSt.wDay = _wtoi(tempBuf);
-				tVal = TIME_VALUE::HOUR;
-				break;
-			case HOUR:
-				prevSt.wHour = _wtoi(tempBuf);
-				tVal = TIME_VALUE::MINUTE;
-				break;
-			case MINUTE:
-				prevSt.wMinute = _wtoi(tempBuf);
-				tVal = TIME_VALUE::SECOND;
-				break;
-			case SECOND:
-				prevSt.wSecond = _wtoi(tempBuf);
-				done = true;
-				break;
-		}
-
-		if (tVal != TIME_VALUE::SECOND)
-		{
-			end = wcschr(strt, L',');
-		}
-		else
-		{
-			end = &buf[249];
-		}
-	}
+	SYSTEMTIME prevSt = WCharToSystemTime(&buf[0], 250);
 
 	//Query actual key
 	
