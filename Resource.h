@@ -50,6 +50,8 @@
 #define IDB_UP_ARROW                    136
 #define IDB_DOWN_ARROW                  140
 #define IDC_BUTTON1                     1000
+#define IDC_DD_MOUSE_OVER               1000
+#define IDC_MOUSE_OVER_DD               1000
 #define IDC_VER_TXT                     1005
 #define IDC_ADAPTER_AUTO_CHECK          1008
 #define IDC_RESET_CONFIG                1009

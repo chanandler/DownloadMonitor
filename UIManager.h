@@ -21,12 +21,15 @@
 #include <map>
 
 //All activation related code is wrapped around this define
-//#define USE_ACTIVATION 
+#define USE_ACTIVATION 
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)
+#define WM_TRAYMESSAGE (WM_USER + 1)
 #define WM_SETCBSEL (WM_USER + 2)
 #define WM_REFRESHACTIVATIONSTATUS (WM_USER + 3)
+#define WM_SETHOVERCBSEL (WM_USER + 4)
+#define WM_SETFORACTIVATION (WM_USER + 5)
 #define ONE_SECOND 1000000
 
 #define MOVE_TO 1
@@ -197,8 +200,9 @@ private:
 	void UpdateFontScaleForDPI();
 	void UpdateBmScaleForDPI();
 	void WriteWindowPos();
-	void ShowNoPrivilegesTooptip(POINT pos);
+	void ShowUnavailableTooptip(POINT pos, const WCHAR* msg, bool AllowElevate);
 	void UpdateSelectedAdapter(HWND dropDown);
+	void UpdateHoverSetting(HWND dropDown);
 	void TryElevate();
 	void OnSelectMonitorItem(int sel);
 	static LRESULT ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);

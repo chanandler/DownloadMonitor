@@ -25,7 +25,8 @@
 
 
 //TODO:
-//Add a 30 day trial period
+//Add an option to disable hover-over functionality
+//Basic auto-update
 //Limit/block functionality if app is unlicensed
 //Convert configmanager to unicode
 

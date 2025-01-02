@@ -14,6 +14,11 @@
 #define UPLOAD_TXT_COLOUR "UPLOAD_TXT_COLOUR"
 #define DOWNLOAD_TXT_COLOUR "DOWNLOAD_TXT_COLOUR"
 #define SELECTED_ADAPTER "SELECTED_ADAPTER"
+#define HOVER_MODE "HOVER_MODE"
+
+#define CFG_SHOW_ALL "SHOW_ALL"
+#define CFG_SHOW_WHEN_AVAILABLE "SHOW_WHEN_AVAILABLE"
+#define CFG_DO_NOTHING "DO_NOTHING"
 
 enum FONT_ENUM
 {
@@ -31,6 +36,13 @@ enum FONT_ENUM
 	QUALITY,
 	PITCH_AND_FAMILY,
 	FACE_NAME
+};
+
+enum HOVER_ENUM
+{
+	SHOW_ALL = 0,
+	SHOW_WHEN_AVAILABLE,
+	DO_NOTHING
 };
 
 class ConfigManager
@@ -84,6 +96,8 @@ public:
 
 	void UpdateOpacity(int newopacity);
 
+	void UpdateHoverSetting(HOVER_ENUM newSetting);
+
 	void GetFullConfigPath(char* buf);
 
 	void ApplyTheme(class Theme* newTheme);
@@ -97,6 +111,8 @@ public:
 	COLORREF* customColBuf;
 
 	LOGFONT* currentFont;
+
+	HOVER_ENUM hoverSetting;
 
 	class ThemeManager* themeManagerRef;
 };

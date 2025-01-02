@@ -9,7 +9,7 @@ ConfigManager::ConfigManager(LPWSTR configDirOverride, ThemeManager* themeManage
 {
 	themeManagerRef = themeManager;
 	customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
-	if (customColBuf) 
+	if (customColBuf)
 	{
 		memset(customColBuf, 0, sizeof(COLORREF));
 	}
@@ -19,6 +19,8 @@ ConfigManager::ConfigManager(LPWSTR configDirOverride, ThemeManager* themeManage
 	downloadTxtColour = (COLORREF*)malloc(sizeof(COLORREF));
 	currentFont = (LOGFONT*)malloc(sizeof(LOGFONT));
 	uniqueAddr = (char*)malloc(sizeof(char) * 32);
+
+	hoverSetting = HOVER_ENUM::SHOW_ALL;
 
 	if (configDirOverride)
 	{
@@ -101,6 +103,12 @@ void ConfigManager::UpdateOpacity(int newopacity)
 	WriteData();
 }
 
+void ConfigManager::UpdateHoverSetting(HOVER_ENUM newSetting)
+{
+	hoverSetting = newSetting;
+	WriteData();
+}
+
 void ConfigManager::GetFullConfigPath(char* buf)
 {
 	//Either pass in override dir or use appdata
@@ -126,7 +134,7 @@ void ConfigManager::WriteData()
 	//(Not very efficient)
 
 	char fg_Buf[200];
-	sprintf_s(fg_Buf, "%s=%i,%i,%i", FOREGROUND_COLOUR, GetRValue(*foregroundColour), GetGValue(*foregroundColour), 
+	sprintf_s(fg_Buf, "%s=%i,%i,%i", FOREGROUND_COLOUR, GetRValue(*foregroundColour), GetGValue(*foregroundColour),
 		GetBValue(*foregroundColour));
 
 	char ch_Buf[200];
@@ -159,13 +167,37 @@ void ConfigManager::WriteData()
 	char adapter_buf[200];
 	sprintf_s(adapter_buf, "%s=%s", SELECTED_ADAPTER, uniqueAddr);
 
+
+	char hSettingBuf[100];
+	switch (hoverSetting)
+	{
+		case HOVER_ENUM::DO_NOTHING:
+		{
+			sprintf_s(hSettingBuf, "%s", CFG_DO_NOTHING);
+			break;
+		}
+		case HOVER_ENUM::SHOW_ALL:
+		{
+			sprintf_s(hSettingBuf, "%s", CFG_SHOW_ALL);
+			break;
+		}
+		case HOVER_ENUM::SHOW_WHEN_AVAILABLE:
+		{
+			sprintf_s(hSettingBuf, "%s", CFG_SHOW_WHEN_AVAILABLE);
+			break;
+		}
+	}
+
+	char hover_buf[200];
+	sprintf_s(hover_buf, "%s=%s", HOVER_MODE, hSettingBuf);
+
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 	std::ofstream configFile(pathBuf);
 
 	// Write to the file
 	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n"
-		<< adapter_buf << "\n";
+		<< adapter_buf << "\n" << hover_buf << "\n";
 
 	configFile.close();
 }
@@ -198,7 +230,7 @@ bool ConfigManager::ReadData()
 
 	int readCount = 0;
 	bool invalidCfg = configFile.fail() ? true : false;
-	
+
 	while (!invalidCfg && getline(configFile, output))
 	{
 		char* dataStart = strchr((char*)output.c_str(), '=');
@@ -259,7 +291,7 @@ bool ConfigManager::ReadData()
 		else if (!strncmp(output.c_str(), FONT, 4))
 		{
 			LOGFONT font = ProcessFont(dataStart);
-			if(font.lfHeight == 0)			
+			if (font.lfHeight == 0)
 			{
 				invalidCfg = true;
 				break;
@@ -298,7 +330,7 @@ bool ConfigManager::ReadData()
 		else if (!strncmp(output.c_str(), SELECTED_ADAPTER, 16))
 		{
 			char* uID = ProcessChar(dataStart);
-			if(!uID)
+			if (!uID)
 			{
 				invalidCfg = true;
 				break;
@@ -310,7 +342,31 @@ bool ConfigManager::ReadData()
 			//*uniqueAddr = (UCHAR)*uID;
 
 			free(uID);
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), HOVER_MODE, 10))
+		{
+			char* hMode = ProcessChar(dataStart);
+			if (!hMode)
+			{
+				invalidCfg = true;
+				break;
+			}
 
+			if (!strcmp(hMode, CFG_SHOW_ALL))
+			{
+				hoverSetting = HOVER_ENUM::SHOW_ALL;
+			}
+			else if (!strcmp(hMode, CFG_SHOW_WHEN_AVAILABLE))
+			{
+				hoverSetting = HOVER_ENUM::SHOW_WHEN_AVAILABLE;
+			}
+			else if (!strcmp(hMode, CFG_DO_NOTHING))
+			{
+				hoverSetting = HOVER_ENUM::DO_NOTHING;
+			}
+
+			free(hMode);
 			++readCount;
 		}
 	}
@@ -331,7 +387,7 @@ bool ConfigManager::ReadData()
 		InitDefaults();
 		return ReadData();
 	}
-	
+
 	return true;
 }
 
@@ -401,76 +457,76 @@ LOGFONT ConfigManager::ProcessFont(char* dataStart)
 
 		switch ((FONT_ENUM)pos)
 		{
-		case HEIGHT:
-		{
-			ret.lfHeight = atoi(buf);
-			break;
-		}
-		case WIDTH:
-		{
-			ret.lfWidth = atoi(buf);
-			break;
-		}
-		case ESCAPEMENT:
-		{
-			ret.lfEscapement = atoi(buf);
-			break;
-		}
-		case ORIENTATION:
-		{
-			ret.lfOrientation = atoi(buf);
-			break;
-		}
-		case WEIGHT:
-		{
-			ret.lfWeight = atoi(buf);
-			break;
-		}
-		case ITALIC:
-		{
-			ret.lfItalic = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case UNDERLINE:
-		{
-			ret.lfUnderline = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case STRIKE_OUT:
-		{
-			ret.lfStrikeOut = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case CHAR_SET:
-		{
-			ret.lfCharSet = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case OUT_PRECISION:
-		{
-			ret.lfOutPrecision = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case CLIP_PRECISION:
-		{
-			ret.lfClipPrecision = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case QUALITY:
-		{
-			ret.lfQuality = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case PITCH_AND_FAMILY:
-		{
-			ret.lfPitchAndFamily = strtoul(buf, nullptr, 10);
-			break;
-		}
-		case FACE_NAME:
-		{
-			swprintf(ret.lfFaceName, LF_FACESIZE, L"%hs", buf);
-			break;
-		}
+			case HEIGHT:
+			{
+				ret.lfHeight = atoi(buf);
+				break;
+			}
+			case WIDTH:
+			{
+				ret.lfWidth = atoi(buf);
+				break;
+			}
+			case ESCAPEMENT:
+			{
+				ret.lfEscapement = atoi(buf);
+				break;
+			}
+			case ORIENTATION:
+			{
+				ret.lfOrientation = atoi(buf);
+				break;
+			}
+			case WEIGHT:
+			{
+				ret.lfWeight = atoi(buf);
+				break;
+			}
+			case ITALIC:
+			{
+				ret.lfItalic = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case UNDERLINE:
+			{
+				ret.lfUnderline = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case STRIKE_OUT:
+			{
+				ret.lfStrikeOut = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case CHAR_SET:
+			{
+				ret.lfCharSet = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case OUT_PRECISION:
+			{
+				ret.lfOutPrecision = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case CLIP_PRECISION:
+			{
+				ret.lfClipPrecision = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case QUALITY:
+			{
+				ret.lfQuality = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case PITCH_AND_FAMILY:
+			{
+				ret.lfPitchAndFamily = strtoul(buf, nullptr, 10);
+				break;
+			}
+			case FACE_NAME:
+			{
+				swprintf(ret.lfFaceName, LF_FACESIZE, L"%hs", buf);
+				break;
+			}
 		}
 
 		nxt++;
@@ -632,8 +688,9 @@ void ConfigManager::InitDefaults()
 
 	lastX = 1200;
 	strcpy_s(uniqueAddr, 32, "AUTO");
+	hoverSetting = HOVER_ENUM::SHOW_ALL;
 
-	if(themeManagerRef)
+	if (themeManagerRef)
 	{
 		ApplyTheme(themeManagerRef->GetTheme(AVAILABLE_THEME::SLATE_GREY));
 	}

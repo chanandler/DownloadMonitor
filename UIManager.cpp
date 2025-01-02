@@ -44,10 +44,10 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	{
 		case ACTIVATION_STATE::UNREGISTERED:
 		{
-			
 			int remDays = activationManager->GetRemainingTrialDays();
 
 			WCHAR buf[250];
+			//TODO replace this with a dialogbox that has a shortcut to activation
 			swprintf_s(buf, L"DownloadMonitor is not free software. You have %i days of free trial remaining", remDays);
 
 			MessageBox(NULL, buf, L"ActivationManager", MB_OK | MB_ICONINFORMATION);
@@ -55,6 +55,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		}
 		case ACTIVATION_STATE::BYPASS_DETECT:
 		{
+			//TODO allow people trying to bypass activation to still activate it legitimately
 			MessageBox(NULL, L"Activation bypass detected! Program will now exit", L"ActivationManager", MB_OK | MB_ICONHAND);
 			exit(-1);
 			return;
@@ -62,7 +63,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		case ACTIVATION_STATE::TRIAL_EXPIRED:
 		{
 			DialogBox(hInstance, MAKEINTRESOURCE(IDD_TRIAL_EXPIRED), NULL, TrialExpiredProc);
-			if(activationManager->GetActivationState() != ACTIVATION_STATE::ACTIVATED)
+			if (activationManager->GetActivationState() != ACTIVATION_STATE::ACTIVATED)
 			{
 				//The user did not activate the program
 				exit(-1);
@@ -70,6 +71,12 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 			}
 
 			MessageBox(NULL, L"Thank you for activating DownloadMonitor", L"ActivationManager", MB_OK);
+
+			if (instance->settingsWnd != NULL)
+			{
+				//Enable all features
+				SendMessage(instance->settingsWnd, WM_SETFORACTIVATION, NULL, NULL);
+			}
 
 			break;
 		}
@@ -595,7 +602,9 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		case WM_MOUSEHOVER:
 		{
-			if (GetCapture() == instance->roothWnd)  //Check if this window has mouse input
+			ACTIVATION_STATE aState = instance->activationManager->GetActivationState();
+			if (GetCapture() == instance->roothWnd || (instance->configManager->hoverSetting == HOVER_ENUM::DO_NOTHING
+				&& aState == ACTIVATION_STATE::ACTIVATED))  //Check if this window has mouse input
 			{
 				break;
 			}
@@ -605,15 +614,23 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			p.y = GET_Y_LPARAM(lParam);
 			ClientToScreen(hWnd, &p);
 
-			if (instance->netManager->HasElevatedPrivileges())
+			if (aState == ACTIVATION_STATE::ACTIVATED)
 			{
-				instance->ShowTopConsumersToolTip(p);
+				if (instance->netManager->HasElevatedPrivileges())
+				{
+					instance->ShowTopConsumersToolTip(p);
+				}
+				else if (instance->configManager->hoverSetting != HOVER_ENUM::SHOW_WHEN_AVAILABLE)
+				{
+					instance->ShowUnavailableTooptip(p, L"Process monitoring requires elevation (Left-click to attempt)", true);
+				}
 			}
+#ifdef USE_ACTIVATION
 			else
 			{
-				instance->ShowNoPrivilegesTooptip(p);
+				instance->ShowUnavailableTooptip(p, L"Process monitoring is only available in the full version", false);
 			}
-
+#endif
 			break;
 		}
 		case WM_MOUSELEAVE:
@@ -721,7 +738,7 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 		}
 		case WM_MOUSELEAVE:
 		{
-			if (uIdSubclass == 1) //For the elevated priv popup
+			if (uIdSubclass > 0) //For the elevated priv popup
 			{
 				DestroyWindow(hWnd);
 				break;
@@ -1046,7 +1063,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, totalWidth);
 }
 
-void UIManager::ShowNoPrivilegesTooptip(POINT pos)
+void UIManager::ShowUnavailableTooptip(POINT pos, const WCHAR* msg, bool AllowElevate)
 {
 	HWND errPopup = CreateWindow(WC_EDIT, L"", WS_VISIBLE | WS_POPUP | ES_CENTER | ES_READONLY | WS_BORDER,
 		pos.x, pos.y, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
@@ -1074,8 +1091,8 @@ void UIManager::ShowNoPrivilegesTooptip(POINT pos)
 	SendMessage(errPopup, WM_SETFONT, (WPARAM)txtFont, NULL);
 
 	free(modFont);
-	SetWindowText(errPopup, L"Process monitoring requires elevation (Left-click to attempt)"); //We should move things like this to the string table
-	SetWindowSubclass(errPopup, PopupProc, 1, 0);
+	SetWindowText(errPopup, msg);
+	SetWindowSubclass(errPopup, PopupProc, AllowElevate ? 1 : 2, 0);
 
 	//For some reason MOUSEMOVE messages aren't being recieved by a static control,
 	//so we use an edit and disable all the edit-y bits here
@@ -1237,7 +1254,7 @@ INT_PTR CALLBACK UIManager::TrialExpiredProc(HWND hDlg, UINT message, WPARAM wPa
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDACTIVATE || LOWORD(wParam) == IDCANCEL)
 			{
-				if (LOWORD(wParam) == IDACTIVATE) 
+				if (LOWORD(wParam) == IDACTIVATE)
 				{
 					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), NULL, ActivationProc);
 				}
@@ -1310,10 +1327,69 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				Button_SetCheck(chkBtn, FALSE);
 			}
 
+			//Init dropdowns
 			SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
+			SendMessage(hDlg, WM_SETHOVERCBSEL, (WPARAM)TRUE, NULL);
 
+#ifdef USE_ACTIVATION 
+			SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
+#endif
 			return (INT_PTR)TRUE;
 
+		}
+		case WM_SETFORACTIVATION:
+		{
+			bool isActivated = instance->activationManager->GetActivationState() == ACTIVATION_STATE::ACTIVATED;
+
+			//If the application is not activated, disabled most of the controls
+			HWND themesBtn = GetDlgItem(hDlg, IDC_THEMES);
+			HWND prmBtn = GetDlgItem(hDlg, IDC_PRIMARY_COLOUR);
+			HWND secBtn = GetDlgItem(hDlg, IDC_SECONDARY_COLOUR);
+			HWND opacBtn = GetDlgItem(hDlg, IDC_OPACITY);
+			HWND textBtn = GetDlgItem(hDlg, IDC_TEXT);
+			HWND hoverDropdown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
+
+
+			Button_Enable(themesBtn, isActivated);
+			Button_Enable(prmBtn, isActivated);
+			Button_Enable(secBtn, isActivated);
+			Button_Enable(opacBtn, isActivated);
+			Button_Enable(textBtn, isActivated);
+
+			ComboBox_Enable(hoverDropdown, isActivated);
+
+			break;
+		}
+		case WM_SETHOVERCBSEL:
+		{
+			HWND dropDown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
+
+			BOOL addToDD = (BOOL)wParam;
+
+
+			//Add each option to the dropdown
+			if (addToDD)
+			{
+				for (int i = 0; i <= HOVER_ENUM::DO_NOTHING; i++)
+				{
+					if (i == HOVER_ENUM::SHOW_ALL)
+					{
+						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"All prompts");
+					}
+					else if (i == HOVER_ENUM::SHOW_WHEN_AVAILABLE)
+					{
+						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"Process list only");
+					}
+					else
+					{
+						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"Nothing");
+					}
+				}
+			}
+
+			SendMessage(dropDown, CB_SETCURSEL, (WPARAM)instance->configManager->hoverSetting, (LPARAM)0);
+
+			break;
 		}
 		case WM_SETCBSEL:
 		{
@@ -1365,6 +1441,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 				SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
 			}
+			break;
 		}
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
@@ -1377,6 +1454,8 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			else if (LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
 			{
 				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
+				std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND)); //Very lazy, some kind of race condition
+				SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
 			}
 			else if (LOWORD(wParam) == IDC_THEMES)
 			{
@@ -1463,11 +1542,20 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			}
 			else if (HIWORD(wParam) == CBN_SELCHANGE)
 			{
-				instance->UpdateSelectedAdapter(HWND(lParam));
+				HWND adapter = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+				if (HWND(lParam) == adapter)
+				{
+					instance->UpdateSelectedAdapter(HWND(lParam));
+				}
+				else
+				{
+					instance->UpdateHoverSetting(HWND(lParam));
+				}
 
 			}
 			break;
-}
+	}
 	return (INT_PTR)FALSE;
 }
 
@@ -1487,6 +1575,12 @@ void UIManager::UpdateSelectedAdapter(HWND dropDown)
 			break;
 		}
 	}
+}
+
+void UIManager::UpdateHoverSetting(HWND dropDown)
+{
+	int selIndex = SendMessage(dropDown, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+	instance->configManager->UpdateHoverSetting(HOVER_ENUM(selIndex));
 }
 
 COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)
