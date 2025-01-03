@@ -9,6 +9,7 @@
 
 #include "iostream"
 #include "thread"
+#include <mutex>
 
 #include "commdlg.h"
 #include "chrono"
@@ -45,7 +46,7 @@
 #define ARROW_SIZE_DIV 5
 #define MIN_ARROW_SCALE_DIV 2
 
-#define VERSION_NUMBER L"Version 0.91"
+#define VERSION_NUMBER L"Version 0.95"
 
 //Base values before any DPI scaling
 #define ROOT_INITIAL_WIDTH 220
@@ -144,6 +145,9 @@ private:
 	COLORREF COLORREFToRGB(COLORREF Col);
 
 	bool running = false;
+
+
+	std::mutex tickMutex;
 
 	HWND roothWnd;
 

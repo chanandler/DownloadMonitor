@@ -13,8 +13,9 @@ NetworkManager::~NetworkManager()
 //PURPOSE: Find currently active adaptor, cache it's position, then track the different between the previous In/Out octets vs the current
 std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces, UCHAR* override)
 {
-	double dl = -1.0;
-	double ul = -1.0;
+	countMutex.lock();
+	double dl = 0.0;
+	double ul = 0.0;
 	int adapterIndex = -1;
 	DWORD res = GetIfTable2(interfaces);
 	if (res == NO_ERROR)
@@ -26,21 +27,17 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 			row = &interfaces[0]->Table[i];
 			if (row)
 			{
-				if (!strcmp((char*)override, (char*)&row->PermanentPhysicalAddress)) //We've set this as our adapter
+				//In auto, this is our selected adapte
+				if (!strcmp((char*)override, "AUTO") && !strcmp((char*)currentPhysicalAddress, (char*)&row->PermanentPhysicalAddress))
 				{
-					goto foundAdapter;
+					adapterIndex = i;
+					break;
 				}
-
-				//Find any interface that has incoming data, is marked as connected and not set as Unspecified medium type
-				if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected || row->PhysicalMediumType == NdisPhysicalMediumUnspecified
-					|| row->PhysicalAddressLength == 0)
+				else if (!strcmp((char*)override, (char*)&row->PermanentPhysicalAddress)) //We've set this as our adapter
 				{
-					continue;
+					adapterIndex = i;
+					break;
 				}
-
-			foundAdapter:
-				adapterIndex = i;
-				break;
 			}
 		}
 
@@ -48,33 +45,24 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 		{
 			row = &interfaces[0]->Table[adapterIndex];
 
-			bool newAdapter = false;
-			if (memcmp(row->PermanentPhysicalAddress, currentPhysicalAddress, IF_MAX_PHYS_ADDRESS_LENGTH))
-			{
-				newAdapter = true;
-				memcpy(currentPhysicalAddress, row->PermanentPhysicalAddress, IF_MAX_PHYS_ADDRESS_LENGTH);
-			}
-
 			if (row)
 			{
 				//Convert to bits
 				double dlBits = (row->InOctets * 8.0);
-				if (newAdapter) //Fix massive delta when first running program/switching adapters
+
+				if(lastDlCount != -1)
 				{
-					lastDlCount = dlBits;
+					dl = dlBits - lastDlCount;
 				}
 
-				dl = dlBits - lastDlCount;
 				lastDlCount = dlBits;
 
 				double ulBits = (row->OutOctets * 8.0);
 
-				if (newAdapter)
+				if(lastUlCount != -1)
 				{
-					lastUlCount = ulBits;
+					ul = ulBits - lastUlCount;
 				}
-
-				ul = ulBits - lastUlCount;
 				lastUlCount = ulBits;
 			}
 		}
@@ -92,7 +80,75 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 		FreeMibTable(interfaces[0]);
 	}
 
+	countMutex.unlock();
+
 	return std::make_tuple(dl, ul);
+}
+
+void NetworkManager::ResetPrev(bool lock)
+{
+	if (lock)
+	{
+		countMutex.lock();
+	}
+
+	lastDlCount = -1;
+	lastUlCount = -1;
+
+	if (lock)
+	{
+		countMutex.unlock();
+	}
+}
+
+//Set currentPhysicalAddress to the auto-selected adapter
+void NetworkManager::SetAutoAdaptor()
+{
+	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
+
+	if (!interfaces)
+	{
+		return;
+	}
+
+	DWORD res = GetIfTable2(interfaces);
+
+	if (res == NO_ERROR)
+	{
+		MIB_IF_ROW2* row;
+
+		for (int i = 0; i < interfaces[0]->NumEntries; i++)
+		{
+			row = &interfaces[0]->Table[i];
+			if (row)
+			{
+				//Find any interface that has incoming data, is marked as connected and not set as Unspecified medium type
+				if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected || row->PhysicalMediumType == NdisPhysicalMediumUnspecified
+					|| row->PhysicalAddressLength == 0)
+				{
+					continue;
+				}
+
+				if (memcmp(row->PermanentPhysicalAddress, currentPhysicalAddress, IF_MAX_PHYS_ADDRESS_LENGTH))
+				{
+					//We have found a different adapter from the current one, reset prev
+					ResetPrev(false);
+				}
+
+				memcpy(currentPhysicalAddress, row->PermanentPhysicalAddress, IF_MAX_PHYS_ADDRESS_LENGTH);
+				break;
+			}
+		}
+
+	}
+
+	//GetIfTable2 allocates memory for the tables, which we must delete
+	if (res == NO_ERROR)
+	{
+		FreeMibTable(interfaces[0]);
+	}
+
+	free(interfaces);
 }
 
 std::vector<MIB_IF_ROW2> NetworkManager::GetAllAdapters()
@@ -116,7 +172,7 @@ std::vector<MIB_IF_ROW2> NetworkManager::GetAllAdapters()
 			row = &interfaces[0]->Table[i];
 			if (row && !foundAdapters[*row->PermanentPhysicalAddress])
 			{
-				if((row->PhysicalMediumType == NdisPhysicalMediumUnspecified || row->PhysicalMediumType == NdisPhysicalMediumBluetooth)
+				if ((row->PhysicalMediumType == NdisPhysicalMediumUnspecified || row->PhysicalMediumType == NdisPhysicalMediumBluetooth)
 					|| *row->PermanentPhysicalAddress == (UCHAR)'\n' || row->PhysicalAddressLength == 0)
 				{
 					continue;
@@ -166,7 +222,7 @@ bool NetworkManager::HasElevatedPrivileges()
 		return SetPerTcpConnectionEStats((PMIB_TCPROW)&tcpTbl->table[i], TcpConnectionEstatsData, (PUCHAR)&settings, 0, sizeof(TCP_ESTATS_DATA_RW_v0), 0)
 			!= ERROR_ACCESS_DENIED;
 	}
-	
+
 	return false;
 }
 
@@ -314,7 +370,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 					WCHAR nameBuf[1024];
 					INT queryResult = QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
 
-					if(queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
+					if (queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
 					{
 						swprintf_s(nameBuf, L"System");
 					}
@@ -354,7 +410,7 @@ std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 	//Create vec with correct amount of items
 	for (int i = allCnsmrs.size() - 1; i >= 0; i--)
 	{
-		if(i >= end)
+		if (i >= end)
 		{
 			ret.push_back(allCnsmrs[i]);
 		}

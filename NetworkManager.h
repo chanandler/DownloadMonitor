@@ -6,6 +6,7 @@
 
 #include "iostream"
 #include "thread"
+#include <mutex>
 
 #include "chrono"
 #include "shellapi.h"
@@ -58,7 +59,10 @@ public:
 class NetworkManager
 {
 public:
+	std::mutex countMutex;
 	std::tuple<double, double> GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces, UCHAR* override);
+	void ResetPrev(bool lock = true);
+	void SetAutoAdaptor();
 	std::vector<MIB_IF_ROW2> GetAllAdapters();
 	INT GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data);
 	INT EnableNetworkTracing(PMIB_TCPROW2 row);

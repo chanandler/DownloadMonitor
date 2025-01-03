@@ -25,9 +25,8 @@
 
 
 //TODO:
-//Add an option to disable hover-over functionality
+//Fix high value difference when waking from sleep
 //Basic auto-update
-//Limit/block functionality if app is unlicensed
 //Convert configmanager to unicode
 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)

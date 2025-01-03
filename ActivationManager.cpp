@@ -14,8 +14,8 @@
 //Then when loading the activation status later, we check the key's current time against the expected time
 
 //TODO
-//Implement trial
-//Add a way to check for all keys just being deleted, some check to see if the program has ever been run before
+//Resiliance testing, try deleting modification time keys
+
 
 ActivationManager::ActivationManager()
 {
@@ -97,8 +97,6 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 
 	RegCloseKey(kHandle);
 	delete aStatus, bSize;
-
-	int a = GetRemainingTrialDays();
 
 	if(ret != ACTIVATION_STATE::TRIAL_EXPIRED && ret != ACTIVATION_STATE::ACTIVATED && !TrialActive())
 	{

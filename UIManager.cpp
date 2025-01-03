@@ -95,6 +95,8 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	//RegisterPopupWindowClass(hInstance);
 	roothWnd = InitInstance(hInstance, nCmdShow);
 
+	RegisterPowerSettingNotification(roothWnd, &GUID_SESSION_DISPLAY_STATUS, DEVICE_NOTIFY_WINDOW_HANDLE);
+
 	// Perform application initialization:
 	if (roothWnd == NULL)
 	{
@@ -254,7 +256,16 @@ void UIManager::UpdateInfo()
 
 	while (instance->running)
 	{
+		instance->tickMutex.lock();
+
+		if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
+		{
+			instance->netManager->SetAutoAdaptor();
+		}
+
 		std::tuple<double, double> speedInfo = netManager->GetAdaptorInfo(instance->roothWnd, interfaces, (UCHAR*)instance->configManager->uniqueAddr);
+
+		instance->tickMutex.unlock();
 
 		double dl = std::get<0>(speedInfo);
 		double ul = std::get<1>(speedInfo);
@@ -830,6 +841,28 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 {
 	switch (message)
 	{
+		case WM_POWERBROADCAST:
+		{
+			switch (wParam)
+			{
+				case PBT_POWERSETTINGCHANGE:
+				{
+
+					POWERBROADCAST_SETTING* setting = (POWERBROADCAST_SETTING*)lParam;
+
+					if (setting->PowerSetting == GUID_SESSION_DISPLAY_STATUS && setting->Data[0])
+					{
+						//Reset prev/current dl/ul counts swhen we're waking from sleep
+						instance->netManager->ResetPrev();
+					}
+
+					break;
+				}
+
+			}
+
+			break;
+		}
 		case WM_TRAYMESSAGE:
 			switch (lParam)
 			{
@@ -992,991 +1025,1001 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			PostQuitMessage(0);
 			break;
 
-	}
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
-
-INT_PTR UIManager::PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort)
-{
-	if ((double)val1 > (double)val2)
-	{
-		return -1;
-	}
-	else if ((double)val1 == (double)val2)
-	{
-		return 0;
+		}
+		return DefWindowProc(hWnd, message, wParam, lParam);
 	}
 
-	return 1;
-}
-
-void UIManager::ShowTopConsumersToolTip(POINT pos)
-{
-	if (popup != NULL)
+	INT_PTR UIManager::PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort)
 	{
-		return;
-		/*DestroyWindow(popup);
-		popup = NULL;*/
-	}
-
-	popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT,
-		pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
-
-	SetWindowSubclass(popup, PopupProc, 0, 0);
-
-	LVCOLUMN lvc;
-
-	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
-	int currDPI = GetDpiForWindow(popup);
-
-	SendMessage(roothWnd, CCM_DPISCALE, (WPARAM)TRUE, NULL);
-
-	//Init collumns
-	//NAME	 DOWNLOAD	UPLOAD
-	int totalWidth = 0;
-	WCHAR cText[256];
-	for (int i = 0; i < 3; i++)
-	{
-		lvc.iSubItem = i;
-		lvc.pszText = cText;
-		lvc.cx = MulDiv(POPUP_INITIAL_WIDTH / 3, currDPI, USER_DEFAULT_SCREEN_DPI);
-		lvc.fmt = LVCFMT_FIXED_WIDTH;
-
-		totalWidth += lvc.cx;
-		LoadString(hInst,
-			IDS_FIRST_COLUMN + i,
-			cText,
-			sizeof(cText) / sizeof(cText[0]));
-
-		ListView_InsertColumn(popup, i, &lvc);
-	}
-
-	++totalWidth;
-
-	HWND lvHeader = ListView_GetHeader(popup);
-
-	DWORD currentStyle = GetWindowLong(lvHeader, GWL_STYLE);
-	SetWindowLongPtr(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
-
-	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
-
-	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, totalWidth);
-}
-
-void UIManager::ShowUnavailableTooptip(POINT pos, const WCHAR* msg, bool AllowElevate)
-{
-	HWND errPopup = CreateWindow(WC_EDIT, L"", WS_VISIBLE | WS_POPUP | ES_CENTER | ES_READONLY | WS_BORDER,
-		pos.x, pos.y, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
-
-	if (errPopup == NULL)
-	{
-		return;
-	}
-
-	LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
-	if (modFont && fontScaleInfo)
-	{
-		memcpy(modFont, configManager->currentFont, sizeof(LOGFONT));
-
-		modFont->lfWidth = fontScaleInfo->width;
-		modFont->lfHeight = fontScaleInfo->height;
-	}
-	else
-	{
-		modFont = configManager->currentFont;
-	}
-
-	HFONT txtFont = CreateFontIndirect(modFont);
-
-	SendMessage(errPopup, WM_SETFONT, (WPARAM)txtFont, NULL);
-
-	free(modFont);
-	SetWindowText(errPopup, msg);
-	SetWindowSubclass(errPopup, PopupProc, AllowElevate ? 1 : 2, 0);
-
-	//For some reason MOUSEMOVE messages aren't being recieved by a static control,
-	//so we use an edit and disable all the edit-y bits here
-	HideCaret(errPopup);
-	SetClassLongPtr(errPopup, GCLP_HCURSOR, (LONG_PTR)LoadCursor(nullptr, IDC_ARROW));
-
-	InitForDPI(errPopup, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
-}
-
-void UIManager::UpdatePosIfRequired()
-{
-	if (!IsOffScreen())
-	{
-		return;
-	}
-
-	//If off screen, place 3/4 along the top right of the users screen
-	int xPos = GetSystemMetrics(SM_CXSCREEN); //SM_CXSCREEN == primary monitor
-	xPos -= (xPos / 4);
-
-	SetWindowPos(roothWnd, HWND_TOPMOST, xPos, 0, 0, 0, SWP_NOSIZE);
-	WriteWindowPos();
-}
-
-void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
-{
-	int xPos = newRct->left;
-	int yPos = newRct->top;
-
-	int	scaledWidth = newRct->right - newRct->left;
-	int	scaledHeight = newRct->bottom - newRct->top;
-
-	SetWindowPos(hWnd, hWnd, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-
-	WriteWindowPos();
-}
-
-void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos, int minWidth)
-{
-	int currDPI = GetDpiForWindow(hWnd);
-
-	int scaledX = dontScalePos ? initialX : MulDiv(initialX, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int scaledY = dontScalePos ? initialY : MulDiv(initialY, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int scaledWidth = MulDiv(initialWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int scaledHeight = MulDiv(initialHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
-
-	//Added for the popup as if width is < total collum width, unwanted scrollbars are shown
-	if (minWidth != -1 && scaledWidth < minWidth)
-	{
-		scaledWidth = minWidth;
-	}
-
-	SetWindowPos(hWnd, hWnd, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-}
-
-bool UIManager::IsOffScreen()
-{
-	RECT rc;
-	GetWindowRect(instance->roothWnd, &rc);
-
-	POINT p;
-	p.x = rc.left;
-	p.y = rc.top;
-	HMONITOR hMon = MonitorFromPoint(p, MONITOR_DEFAULTTONULL);
-	if (hMon == NULL)
-	{
-		//Point is off screen
-		return true;
-	}
-
-	return false;
-}
-
-void UIManager::UpdateFontScaleForDPI()
-{
-	int currDPI = GetDpiForWindow(roothWnd);
-
-	int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int scaledHeight = MulDiv(configManager->currentFont->lfHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
-
-	if (fontScaleInfo)
-	{
-		delete fontScaleInfo;
-	}
-
-	fontScaleInfo = new FontScaleInfo(scaledWidth, scaledHeight);
-}
-
-void UIManager::UpdateBmScaleForDPI()
-{
-	int currDPI = GetDpiForWindow(roothWnd);
-
-	int scaledX = MulDiv(ARROW_X_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
-
-	int scaledY = MulDiv(ARROW_Y_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
-
-	//Download and upload have the same dimensions so we can do this
-	int width = MulDiv(instance->downloadIconBm.bmWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int height = MulDiv(instance->downloadIconBm.bmHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
-
-	if (bmScaleInfo)
-	{
-		delete bmScaleInfo;
-	}
-
-	bmScaleInfo = new BitmapScaleInfo(scaledX, scaledY, width, height);
-}
-
-void UIManager::WriteWindowPos()
-{
-	RECT rect = { NULL };
-	GetWindowRect(roothWnd, &rect);
-	int x = rect.left;
-	int y = rect.top;
-
-	configManager->UpdateWindowPos(x, y);
-}
-
-void UIManager::TryElevate()
-{
-	WCHAR path[MAX_PATH];
-
-	if (!GetModuleFileName(NULL, path, MAX_PATH))
-	{
-		return;
-	}
-
-	SHELLEXECUTEINFO sEI = { sizeof(sEI) };
-	sEI.lpVerb = L"runas";
-	sEI.lpFile = path;
-	sEI.hwnd = NULL;
-	sEI.nShow = SW_NORMAL;
-
-	if (!ShellExecuteEx(&sEI))
-	{
-		DWORD exErr = GetLastError();
-		if (exErr == ERROR_CANCELLED)
+		if ((double)val1 > (double)val2)
 		{
-			//User denied the UAC prompt (or something else went wrong)
+			return -1;
+		}
+		else if ((double)val1 == (double)val2)
+		{
+			return 0;
 		}
 
-		return;
+		return 1;
 	}
 
-	SendMessage(roothWnd, WM_CLOSE, NULL, NULL); //Shut down this instance
-}
-
-INT_PTR CALLBACK UIManager::TrialExpiredProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
+	void UIManager::ShowTopConsumersToolTip(POINT pos)
 	{
-		case WM_INITDIALOG:
+		if (popup != NULL)
 		{
-			return (INT_PTR)TRUE;
+			return;
+			/*DestroyWindow(popup);
+			popup = NULL;*/
 		}
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDACTIVATE || LOWORD(wParam) == IDCANCEL)
+
+		popup = CreateWindow(WC_LISTVIEW, L"", WS_VISIBLE | WS_POPUP | LVS_REPORT,
+			pos.x, pos.y, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
+
+		SetWindowSubclass(popup, PopupProc, 0, 0);
+
+		LVCOLUMN lvc;
+
+		lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT | LVCF_SUBITEM;
+		int currDPI = GetDpiForWindow(popup);
+
+		SendMessage(roothWnd, CCM_DPISCALE, (WPARAM)TRUE, NULL);
+
+		//Init collumns
+		//NAME	 DOWNLOAD	UPLOAD
+		int totalWidth = 0;
+		WCHAR cText[256];
+		for (int i = 0; i < 3; i++)
+		{
+			lvc.iSubItem = i;
+			lvc.pszText = cText;
+			lvc.cx = MulDiv(POPUP_INITIAL_WIDTH / 3, currDPI, USER_DEFAULT_SCREEN_DPI);
+			lvc.fmt = LVCFMT_FIXED_WIDTH;
+
+			totalWidth += lvc.cx;
+			LoadString(hInst,
+				IDS_FIRST_COLUMN + i,
+				cText,
+				sizeof(cText) / sizeof(cText[0]));
+
+			ListView_InsertColumn(popup, i, &lvc);
+		}
+
+		++totalWidth;
+
+		HWND lvHeader = ListView_GetHeader(popup);
+
+		DWORD currentStyle = GetWindowLong(lvHeader, GWL_STYLE);
+		SetWindowLongPtr(lvHeader, GWL_STYLE, (currentStyle & ~HDS_BUTTONS));
+
+		SetWindowSubclass(lvHeader, PopupProc, 0, 0);
+
+		InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, totalWidth);
+	}
+
+	void UIManager::ShowUnavailableTooptip(POINT pos, const WCHAR * msg, bool AllowElevate)
+	{
+		HWND errPopup = CreateWindow(WC_EDIT, L"", WS_VISIBLE | WS_POPUP | ES_CENTER | ES_READONLY | WS_BORDER,
+			pos.x, pos.y, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, roothWnd, NULL, hInst, NULL);
+
+		if (errPopup == NULL)
+		{
+			return;
+		}
+
+		LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
+		if (modFont && fontScaleInfo)
+		{
+			memcpy(modFont, configManager->currentFont, sizeof(LOGFONT));
+
+			modFont->lfWidth = fontScaleInfo->width;
+			modFont->lfHeight = fontScaleInfo->height;
+		}
+		else
+		{
+			modFont = configManager->currentFont;
+		}
+
+		HFONT txtFont = CreateFontIndirect(modFont);
+
+		SendMessage(errPopup, WM_SETFONT, (WPARAM)txtFont, NULL);
+
+		free(modFont);
+		SetWindowText(errPopup, msg);
+		SetWindowSubclass(errPopup, PopupProc, AllowElevate ? 1 : 2, 0);
+
+		//For some reason MOUSEMOVE messages aren't being recieved by a static control,
+		//so we use an edit and disable all the edit-y bits here
+		HideCaret(errPopup);
+		SetClassLongPtr(errPopup, GCLP_HCURSOR, (LONG_PTR)LoadCursor(nullptr, IDC_ARROW));
+
+		InitForDPI(errPopup, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
+	}
+
+	void UIManager::UpdatePosIfRequired()
+	{
+		if (!IsOffScreen())
+		{
+			return;
+		}
+
+		//If off screen, place 3/4 along the top right of the users screen
+		int xPos = GetSystemMetrics(SM_CXSCREEN); //SM_CXSCREEN == primary monitor
+		xPos -= (xPos / 4);
+
+		SetWindowPos(roothWnd, HWND_TOPMOST, xPos, 0, 0, 0, SWP_NOSIZE);
+		WriteWindowPos();
+	}
+
+	void UIManager::UpdateForDPI(HWND hWnd, RECT * newRct)
+	{
+		int xPos = newRct->left;
+		int yPos = newRct->top;
+
+		int	scaledWidth = newRct->right - newRct->left;
+		int	scaledHeight = newRct->bottom - newRct->top;
+
+		SetWindowPos(hWnd, hWnd, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+		WriteWindowPos();
+	}
+
+	void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos, int minWidth)
+	{
+		int currDPI = GetDpiForWindow(hWnd);
+
+		int scaledX = dontScalePos ? initialX : MulDiv(initialX, currDPI, USER_DEFAULT_SCREEN_DPI);
+		int scaledY = dontScalePos ? initialY : MulDiv(initialY, currDPI, USER_DEFAULT_SCREEN_DPI);
+		int scaledWidth = MulDiv(initialWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
+		int scaledHeight = MulDiv(initialHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+		//Added for the popup as if width is < total collum width, unwanted scrollbars are shown
+		if (minWidth != -1 && scaledWidth < minWidth)
+		{
+			scaledWidth = minWidth;
+		}
+
+		SetWindowPos(hWnd, hWnd, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	}
+
+	bool UIManager::IsOffScreen()
+	{
+		RECT rc;
+		GetWindowRect(instance->roothWnd, &rc);
+
+		POINT p;
+		p.x = rc.left;
+		p.y = rc.top;
+		HMONITOR hMon = MonitorFromPoint(p, MONITOR_DEFAULTTONULL);
+		if (hMon == NULL)
+		{
+			//Point is off screen
+			return true;
+		}
+
+		return false;
+	}
+
+	void UIManager::UpdateFontScaleForDPI()
+	{
+		int currDPI = GetDpiForWindow(roothWnd);
+
+		int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
+		int scaledHeight = MulDiv(configManager->currentFont->lfHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+		if (fontScaleInfo)
+		{
+			delete fontScaleInfo;
+		}
+
+		fontScaleInfo = new FontScaleInfo(scaledWidth, scaledHeight);
+	}
+
+	void UIManager::UpdateBmScaleForDPI()
+	{
+		int currDPI = GetDpiForWindow(roothWnd);
+
+		int scaledX = MulDiv(ARROW_X_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+		int scaledY = MulDiv(ARROW_Y_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+		//Download and upload have the same dimensions so we can do this
+		int width = MulDiv(instance->downloadIconBm.bmWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
+		int height = MulDiv(instance->downloadIconBm.bmHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+		if (bmScaleInfo)
+		{
+			delete bmScaleInfo;
+		}
+
+		bmScaleInfo = new BitmapScaleInfo(scaledX, scaledY, width, height);
+	}
+
+	void UIManager::WriteWindowPos()
+	{
+		RECT rect = { NULL };
+		GetWindowRect(roothWnd, &rect);
+		int x = rect.left;
+		int y = rect.top;
+
+		configManager->UpdateWindowPos(x, y);
+	}
+
+	void UIManager::TryElevate()
+	{
+		WCHAR path[MAX_PATH];
+
+		if (!GetModuleFileName(NULL, path, MAX_PATH))
+		{
+			return;
+		}
+
+		SHELLEXECUTEINFO sEI = { sizeof(sEI) };
+		sEI.lpVerb = L"runas";
+		sEI.lpFile = path;
+		sEI.hwnd = NULL;
+		sEI.nShow = SW_NORMAL;
+
+		if (!ShellExecuteEx(&sEI))
+		{
+			DWORD exErr = GetLastError();
+			if (exErr == ERROR_CANCELLED)
 			{
-				if (LOWORD(wParam) == IDACTIVATE)
+				//User denied the UAC prompt (or something else went wrong)
+			}
+
+			return;
+		}
+
+		SendMessage(roothWnd, WM_CLOSE, NULL, NULL); //Shut down this instance
+	}
+
+	INT_PTR CALLBACK UIManager::TrialExpiredProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_INITDIALOG:
+			{
+				return (INT_PTR)TRUE;
+			}
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDACTIVATE || LOWORD(wParam) == IDCANCEL)
 				{
-					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), NULL, ActivationProc);
+					if (LOWORD(wParam) == IDACTIVATE)
+					{
+						DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), NULL, ActivationProc);
+					}
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
 				}
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			break;
-	}
-	return (INT_PTR)FALSE;
-}
-INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_INITDIALOG:
-		{
-			HWND vTxt = GetDlgItem(hDlg, IDC_VER_TXT);
-			if (vTxt != NULL)
-			{
-				SendMessage(vTxt, WM_SETTEXT, 0, (LPARAM)VERSION_NUMBER);
-			}
-
-			return (INT_PTR)TRUE;
+				break;
 		}
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		return (INT_PTR)FALSE;
+	}
+	INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_INITDIALOG:
 			{
-				EndDialog(hDlg, LOWORD(wParam));
+				HWND vTxt = GetDlgItem(hDlg, IDC_VER_TXT);
+				if (vTxt != NULL)
+				{
+					SendMessage(vTxt, WM_SETTEXT, 0, (LPARAM)VERSION_NUMBER);
+				}
+
 				return (INT_PTR)TRUE;
 			}
-			break;
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+				{
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				break;
+		}
+		return (INT_PTR)FALSE;
 	}
-	return (INT_PTR)FALSE;
-}
 
-INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
+	INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	{
-		case WM_INITDIALOG:
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
 		{
-			RECT dlgRc{ 0 };
-			RECT rootRc{ 0 };
-			GetWindowRect(hDlg, &dlgRc);
-			GetWindowRect(instance->roothWnd, &rootRc);
+			case WM_INITDIALOG:
+			{
+				RECT dlgRc{ 0 };
+				RECT rootRc{ 0 };
+				GetWindowRect(hDlg, &dlgRc);
+				GetWindowRect(instance->roothWnd, &rootRc);
 
-			//Move underneath root window
-			SetWindowPos(hDlg, NULL, dlgRc.left, rootRc.bottom + 20, NULL, NULL, SWP_NOSIZE | SWP_NOZORDER);
+				//Move underneath root window
+				SetWindowPos(hDlg, NULL, dlgRc.left, rootRc.bottom + 20, NULL, NULL, SWP_NOSIZE | SWP_NOZORDER);
 
-			instance->settingsWnd = hDlg;
-			HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
+				instance->settingsWnd = hDlg;
+				HWND activateBtn = GetDlgItem(hDlg, IDC_ACTIVATION_SETTINGS);
 
 
 #ifdef USE_ACTIVATION 
-			ShowWindow(activateBtn, TRUE);
+				ShowWindow(activateBtn, TRUE);
 #else
-			ShowWindow(activateBtn, FALSE);
+				ShowWindow(activateBtn, FALSE);
 #endif
-
-			HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
-
-			if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
-			{
-				Button_SetCheck(chkBtn, TRUE);
-			}
-			else
-			{
-				Button_SetCheck(chkBtn, FALSE);
-			}
-
-			//Init dropdowns
-			SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
-			SendMessage(hDlg, WM_SETHOVERCBSEL, (WPARAM)TRUE, NULL);
-
-#ifdef USE_ACTIVATION 
-			SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
-#endif
-			return (INT_PTR)TRUE;
-
-		}
-		case WM_SETFORACTIVATION:
-		{
-			bool isActivated = instance->activationManager->GetActivationState() == ACTIVATION_STATE::ACTIVATED;
-
-			//If the application is not activated, disabled most of the controls
-			HWND themesBtn = GetDlgItem(hDlg, IDC_THEMES);
-			HWND prmBtn = GetDlgItem(hDlg, IDC_PRIMARY_COLOUR);
-			HWND secBtn = GetDlgItem(hDlg, IDC_SECONDARY_COLOUR);
-			HWND opacBtn = GetDlgItem(hDlg, IDC_OPACITY);
-			HWND textBtn = GetDlgItem(hDlg, IDC_TEXT);
-			HWND hoverDropdown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
-
-
-			Button_Enable(themesBtn, isActivated);
-			Button_Enable(prmBtn, isActivated);
-			Button_Enable(secBtn, isActivated);
-			Button_Enable(opacBtn, isActivated);
-			Button_Enable(textBtn, isActivated);
-
-			ComboBox_Enable(hoverDropdown, isActivated);
-
-			break;
-		}
-		case WM_SETHOVERCBSEL:
-		{
-			HWND dropDown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
-
-			BOOL addToDD = (BOOL)wParam;
-
-
-			//Add each option to the dropdown
-			if (addToDD)
-			{
-				for (int i = 0; i <= HOVER_ENUM::DO_NOTHING; i++)
-				{
-					if (i == HOVER_ENUM::SHOW_ALL)
-					{
-						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"All prompts");
-					}
-					else if (i == HOVER_ENUM::SHOW_WHEN_AVAILABLE)
-					{
-						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"Process list only");
-					}
-					else
-					{
-						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"Nothing");
-					}
-				}
-			}
-
-			SendMessage(dropDown, CB_SETCURSEL, (WPARAM)instance->configManager->hoverSetting, (LPARAM)0);
-
-			break;
-		}
-		case WM_SETCBSEL:
-		{
-			//Init the adapter selection dropdown
-			BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
-			HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
-
-			BOOL addToDD = (BOOL)wParam;
-
-			if (dropDown != NULL)
-			{
-				ComboBox_Enable(dropDown, !autoMode);
-
-				instance->foundAdapters = netManager->GetAllAdapters();
-
-				int sel = -1;
-				for (int i = 0; i < instance->foundAdapters.size(); i++)
-				{
-					if (addToDD)
-					{
-						SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
-					}
-
-					//If in auto mode, set to the currently bound adapater...
-					if (autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
-					{
-						sel = i;
-					}
-					else if (!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
-					{
-						sel = i;
-					}
-				}
-
-				if (sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
-				{
-					char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
-					strcpy(buf, "AUTO");
-					instance->configManager->UpdateSelectedAdapter(buf);
-
-					SendMessage(hDlg, message, wParam, lParam);
-					break;
-				}
-
-				if (sel == -1)
-				{
-					sel = 0;
-				}
-
-				SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
-			}
-			break;
-		}
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
-			{
-				instance->foundAdapters.clear();
-				EndDialog(hDlg, LOWORD(wParam));
-				instance->settingsWnd = NULL;
-				return (INT_PTR)TRUE;
-			}
-			else if (LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
-			{
-				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
-				std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND)); //Very lazy, some kind of race condition
-				SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
-			}
-			else if (LOWORD(wParam) == IDC_THEMES)
-			{
-				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_THEMES), hDlg, ThemesProc);
-			}
-			else if (LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
-			{
-				bool isPrimary = LOWORD(wParam) == IDC_PRIMARY_COLOUR;
-				COLORREF rgbResult = instance->ShowColourDialog(hDlg,
-					isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour, CC_ANYCOLOR | CC_RGBINIT);
-
-				if (isPrimary)
-				{
-					instance->configManager->UpdateForegroundColour(rgbResult);
-				}
-				else
-				{
-					instance->configManager->UpdateChildColour(rgbResult);
-				}
-
-				//Force repaint to apply colours
-				instance->ForceRepaint();
-			}
-			else if (LOWORD(wParam) == IDC_RESET_CONFIG)
-			{
-				instance->configManager->ResetConfig();
-				instance->UpdateOpacity(instance->roothWnd);
-				instance->ForceRepaint();
-				instance->UpdateBitmapColours();
-				instance->WriteWindowPos(); //We reset the whole cfg so re-write this
 
 				HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
-				HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
 
 				if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
 				{
 					Button_SetCheck(chkBtn, TRUE);
-					ComboBox_Enable(dropDown, FALSE);
 				}
 				else
 				{
 					Button_SetCheck(chkBtn, FALSE);
-					ComboBox_Enable(dropDown, TRUE);
 				}
+
+				//Init dropdowns
+				SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
+				SendMessage(hDlg, WM_SETHOVERCBSEL, (WPARAM)TRUE, NULL);
+
+#ifdef USE_ACTIVATION 
+				SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
+#endif
+				return (INT_PTR)TRUE;
+
 			}
-			else if (LOWORD(wParam) == IDC_OPACITY)
+			case WM_SETFORACTIVATION:
 			{
-				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_OPACITY), hDlg, OpacityProc);
+				bool isActivated = instance->activationManager->GetActivationState() == ACTIVATION_STATE::ACTIVATED;
+
+				//If the application is not activated, disabled most of the controls
+				HWND themesBtn = GetDlgItem(hDlg, IDC_THEMES);
+				HWND prmBtn = GetDlgItem(hDlg, IDC_PRIMARY_COLOUR);
+				HWND secBtn = GetDlgItem(hDlg, IDC_SECONDARY_COLOUR);
+				HWND opacBtn = GetDlgItem(hDlg, IDC_OPACITY);
+				HWND textBtn = GetDlgItem(hDlg, IDC_TEXT);
+				HWND hoverDropdown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
+
+
+				Button_Enable(themesBtn, isActivated);
+				Button_Enable(prmBtn, isActivated);
+				Button_Enable(secBtn, isActivated);
+				Button_Enable(opacBtn, isActivated);
+				Button_Enable(textBtn, isActivated);
+
+				ComboBox_Enable(hoverDropdown, isActivated);
+
+				break;
 			}
-			else if (LOWORD(wParam) == IDC_TEXT)
+			case WM_SETHOVERCBSEL:
 			{
-				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_TEXT), hDlg, TextProc);
+				HWND dropDown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
+
+				BOOL addToDD = (BOOL)wParam;
+
+
+				//Add each option to the dropdown
+				if (addToDD)
+				{
+					for (int i = 0; i <= HOVER_ENUM::DO_NOTHING; i++)
+					{
+						if (i == HOVER_ENUM::SHOW_ALL)
+						{
+							SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"All prompts");
+						}
+						else if (i == HOVER_ENUM::SHOW_WHEN_AVAILABLE)
+						{
+							SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"Process list only");
+						}
+						else
+						{
+							SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)L"Nothing");
+						}
+					}
+				}
+
+				SendMessage(dropDown, CB_SETCURSEL, (WPARAM)instance->configManager->hoverSetting, (LPARAM)0);
+
+				break;
 			}
-			else if (HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
+			case WM_SETCBSEL:
 			{
-				BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
+				//Init the adapter selection dropdown
+				BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
 				HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+				BOOL addToDD = (BOOL)wParam;
 
 				if (dropDown != NULL)
 				{
-					ComboBox_Enable(dropDown, !enabled);
+					ComboBox_Enable(dropDown, !autoMode);
 
-					if (enabled)
+					instance->foundAdapters = netManager->GetAllAdapters();
+
+					int sel = -1;
+					for (int i = 0; i < instance->foundAdapters.size(); i++)
+					{
+						if (addToDD)
+						{
+							SendMessage(dropDown, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)instance->foundAdapters[i].Description);
+						}
+
+						//If in auto mode, set to the currently bound adapater...
+						if (autoMode && !strcmp((char*)&instance->netManager->currentPhysicalAddress, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+						{
+							sel = i;
+						}
+						else if (!strcmp((char*)instance->configManager->uniqueAddr, (char*)&instance->foundAdapters[i].PermanentPhysicalAddress))
+						{
+							sel = i;
+						}
+					}
+
+					if (sel == -1 && !autoMode) //Adapter no longer exists, revert to auto
 					{
 						char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
 						strcpy(buf, "AUTO");
 						instance->configManager->UpdateSelectedAdapter(buf);
-						if (instance->settingsWnd != NULL)
-						{
-							//This is really lazy, but basically we must wait for NetworkManager to update it's currentPhysicalAddress variable
-							//so the WM_SETCBSEL message is handled correctly and shows the correct selection
-							//The NetworkManager updates this every second, causing this race condition
-							//We could update currentPhysicalAddress from here but then that would break the newAdapater check in NetworkManager
 
-							std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
-							SendMessage(instance->settingsWnd, WM_SETCBSEL, (WPARAM)FALSE, NULL);
-						}
-					}
-					else
-					{
-						instance->UpdateSelectedAdapter(dropDown);
-					}
-				}
-			}
-			else if (HIWORD(wParam) == CBN_SELCHANGE)
-			{
-				HWND adapter = GetDlgItem(hDlg, IDC_ADAPTER_DD);
-
-				if (HWND(lParam) == adapter)
-				{
-					instance->UpdateSelectedAdapter(HWND(lParam));
-				}
-				else
-				{
-					instance->UpdateHoverSetting(HWND(lParam));
-				}
-
-			}
-			break;
-	}
-	return (INT_PTR)FALSE;
-}
-
-void UIManager::UpdateSelectedAdapter(HWND dropDown)
-{
-	int selIndex = SendMessage(dropDown, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-	WCHAR selItemName[IF_MAX_STRING_SIZE + 1];
-	selItemName[IF_MAX_STRING_SIZE] = 0;
-	SendMessage(dropDown, CB_GETLBTEXT, (WPARAM)selIndex, (LPARAM)selItemName);
-
-	//Match back up with address
-	for (int i = 0; i < instance->foundAdapters.size(); i++)
-	{
-		if (!wcscmp(selItemName, instance->foundAdapters[i].Description))
-		{
-			instance->configManager->UpdateSelectedAdapter((char*)instance->foundAdapters[i].PermanentPhysicalAddress);
-			break;
-		}
-	}
-}
-
-void UIManager::UpdateHoverSetting(HWND dropDown)
-{
-	int selIndex = SendMessage(dropDown, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-	instance->configManager->UpdateHoverSetting(HOVER_ENUM(selIndex));
-}
-
-COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)
-{
-	CHOOSECOLOR colorStruct = { 0 };
-	colorStruct.hwndOwner = owner;
-	colorStruct.lStructSize = sizeof(CHOOSECOLOR);
-	colorStruct.rgbResult = *initCol;
-	colorStruct.lpCustColors = instance->configManager->customColBuf;
-	colorStruct.Flags = flags;
-	ChooseColor(&colorStruct);
-
-	WORD h, l, s;
-	ColorRGBToHLS(colorStruct.rgbResult, &h, &l, &s);
-	COLORREF r = ColorHLSToRGB(h, l, s);
-	//return colorStruct.rgbResult;
-	return r;
-}
-
-INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_INITDIALOG:
-		{
-			HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
-			SendMessage(sliderCtrl, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELPARAM(MIN_OPACITY, MAX_OPACITY));
-			SendMessage(sliderCtrl, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)instance->configManager->opacity);
-			return (INT_PTR)TRUE;
-		}
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK)
-			{
-				HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
-				int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
-
-				if (newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
-				{
-					instance->configManager->UpdateOpacity(newVal);
-					instance->UpdateOpacity(instance->roothWnd);
-					instance->ForceRepaint();
-				}
-				else
-				{
-					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_INVALID_INPUT), hDlg, AboutProc); //Just re-use this proc as it does the same thing
-				}
-
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			if (LOWORD(wParam) == IDCANCEL)
-			{
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			break;
-	}
-	return (INT_PTR)FALSE;
-}
-
-INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_INITDIALOG:
-		{
-			return (INT_PTR)TRUE;
-		}
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK)
-			{
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			else if (LOWORD(wParam) == IDC_FONT)
-			{
-				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_FONT_WARNING_NEW), hDlg, FontWarningProc);
-			}
-			else if (LOWORD(wParam) == IDC_UPLOAD_COL || LOWORD(wParam) == IDC_DOWNLOAD_COL)
-			{
-				bool isUploadCol = LOWORD(wParam) == IDC_UPLOAD_COL;
-
-				COLORREF rgbResult = instance->ShowColourDialog(hDlg,
-					isUploadCol ? instance->configManager->uploadTxtColour : instance->configManager->downloadTxtColour, CC_ANYCOLOR | CC_RGBINIT);
-
-				if (isUploadCol)
-				{
-					instance->configManager->UpdateUploadTextColour(rgbResult);
-				}
-				else
-				{
-					instance->configManager->UpdateDownloadTextColour(rgbResult);
-				}
-
-				instance->UpdateBitmapColours();
-			}
-			if (LOWORD(wParam) == IDCANCEL)
-			{
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			break;
-	}
-	return (INT_PTR)FALSE;
-}
-
-INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_INITDIALOG:
-			return (INT_PTR)TRUE;
-
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-			{
-				if (LOWORD(wParam) == IDOK)
-				{
-					ShowWindow(hDlg, SW_HIDE);
-
-					CHOOSEFONT fontStruct = { 0 };
-					fontStruct.lStructSize = sizeof(CHOOSEFONT);
-					fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY;
-					fontStruct.nSizeMin = 4;
-					fontStruct.nSizeMax = 12;
-					fontStruct.hwndOwner = hDlg;
-					fontStruct.lpLogFont = instance->configManager->currentFont;
-
-					if (ChooseFont(&fontStruct))
-					{
-						instance->configManager->UpdateFont(*fontStruct.lpLogFont);
-						instance->UpdateFontScaleForDPI();
-					}
-				}
-
-				EndDialog(hDlg, LOWORD(wParam));
-				return (INT_PTR)TRUE;
-			}
-			break;
-	}
-	return (INT_PTR)FALSE;
-}
-
-HWND* UIManager::GetLicenseKeyArray(HWND hDlg)
-{
-	HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
-	HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
-	HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
-	HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
-	HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
-
-	return new HWND[KEY_SIZE]{ lKeyInput1 , lKeyInput2, lKeyInput3, lKeyInput4, lKeyInput5 };
-}
-
-INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_REFRESHACTIVATIONSTATUS:
-		{
-
-			//HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
-			//HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
-			//HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
-			//HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
-			//HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
-
-			//HWND* lKeyInputs[5] = { &lKeyInput1 , &lKeyInput2, &lKeyInput3, &lKeyInput4, &lKeyInput5 };
-
-			HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
-			HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
-			HWND aStatusText = GetDlgItem(hDlg, IDC_ACTIVATION_STATUS);
-			HWND aButton = GetDlgItem(hDlg, IDC_ACTIVATE);
-
-			ACTIVATION_STATE aState = instance->activationManager->GetActivationState();
-
-			switch (aState)
-			{
-				case ACTIVATION_STATE::ACTIVATED:
-				{
-					SetWindowText(aStatusText, L"Status: Activated");
-
-					for (int i = 0; i < KEY_SIZE; i++)
-					{
-						ShowWindow(lKeyInputs[i], FALSE);
-					}
-					ShowWindow(aButton, FALSE);
-					ShowWindow(emailInput, FALSE);
-					break;
-				}
-				case ACTIVATION_STATE::UNREGISTERED:
-				{
-					SetWindowText(aStatusText, L"Status: Unregistered");
-					break;
-				}
-				case ACTIVATION_STATE::TRIAL_EXPIRED:
-				{
-					SetWindowText(aStatusText, L"Status: Trial expired");
-					break;
-				}
-				case ACTIVATION_STATE::BYPASS_DETECT:
-				{
-					SetWindowText(aStatusText, L"Status: Bypass detected");
-					break;
-				}
-			}
-			break;
-
-			delete[] lKeyInputs;
-		}
-		case WM_INITDIALOG:
-		{
-			HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
-
-			for (int i = 0; i < KEY_SIZE; i++)
-			{
-
-				//Restrict to numerical input only
-				DWORD currentStyle = GetWindowLong(lKeyInputs[i], GWL_STYLE);
-
-				SetWindowLongPtr(lKeyInputs[i], GWL_STYLE, (currentStyle | ES_NUMBER));
-			}
-
-			delete[] lKeyInputs;
-			SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
-			return (INT_PTR)TRUE;
-		}
-		case WM_COMMAND:
-		{
-			if (LOWORD(wParam) == IDC_ACTIVATE)
-			{
-				HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
-				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
-				std::vector<WCHAR*> strVec; //Store buf from each segment here
-				bool abort = false;
-				for (int i = 0; i < KEY_SIZE; i++)
-				{
-					HWND lKeyInput = lKeyInputs[i];
-					int lTextLen = GetWindowTextLength(lKeyInput);
-
-					if (lTextLen == 0)
-					{
-						abort = true;
+						SendMessage(hDlg, message, wParam, lParam);
 						break;
 					}
 
-					++lTextLen;
-
-					WCHAR* buf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
-					if (buf)
+					if (sel == -1)
 					{
-						GetWindowText(lKeyInput, buf, lTextLen);
-
-						strVec.push_back(buf);
+						sel = 0;
 					}
+
+					SendMessage(dropDown, CB_SETCURSEL, (WPARAM)sel, (LPARAM)0);
 				}
-
-				int keyArr[KEY_SIZE];
-
-				for (int i = 0; i < strVec.size(); i++)
+				break;
+			}
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
 				{
-					if (!abort)
-					{
-						keyArr[i] = _wtoi(strVec[i]);
-					}
-					free(strVec[i]);
+					instance->foundAdapters.clear();
+					EndDialog(hDlg, LOWORD(wParam));
+					instance->settingsWnd = NULL;
+					return (INT_PTR)TRUE;
 				}
-
-				if (!abort)
+				else if (LOWORD(wParam) == IDC_ACTIVATION_SETTINGS)
 				{
-					//Get email address to use as key
-					int lTextLen = GetWindowTextLength(emailInput) + 1;
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
+					SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
+				}
+				else if (LOWORD(wParam) == IDC_THEMES)
+				{
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_THEMES), hDlg, ThemesProc);
+				}
+				else if (LOWORD(wParam) == IDC_PRIMARY_COLOUR || LOWORD(wParam) == IDC_SECONDARY_COLOUR)
+				{
+					bool isPrimary = LOWORD(wParam) == IDC_PRIMARY_COLOUR;
+					COLORREF rgbResult = instance->ShowColourDialog(hDlg,
+						isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour, CC_ANYCOLOR | CC_RGBINIT);
 
-					WCHAR* emailBuf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
-					if (emailBuf)
+					if (isPrimary)
 					{
-						GetWindowText(emailInput, emailBuf, lTextLen);
-						instance->activationManager->TryActivate(keyArr, emailBuf);
-						free(emailBuf);
+						instance->configManager->UpdateForegroundColour(rgbResult);
+					}
+					else
+					{
+						instance->configManager->UpdateChildColour(rgbResult);
 					}
 
-					SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
+					//Force repaint to apply colours
+					instance->ForceRepaint();
 				}
+				else if (LOWORD(wParam) == IDC_RESET_CONFIG)
+				{
+					instance->tickMutex.lock();
+
+					instance->configManager->ResetConfig();
+					instance->UpdateOpacity(instance->roothWnd);
+					instance->ForceRepaint();
+					instance->UpdateBitmapColours();
+					instance->WriteWindowPos(); //We reset the whole cfg so re-write this
+
+					HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
+					HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+					if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
+					{
+						instance->netManager->SetAutoAdaptor();
+						Button_SetCheck(chkBtn, TRUE);
+						ComboBox_Enable(dropDown, FALSE);
+					}
+					else
+					{
+						Button_SetCheck(chkBtn, FALSE);
+						ComboBox_Enable(dropDown, TRUE);
+					}
+
+					SendMessage(hDlg, WM_SETHOVERCBSEL, (WPARAM)FALSE, NULL);
+					SendMessage(hDlg, WM_SETCBSEL, (WPARAM)FALSE, NULL);
+
+					instance->netManager->ResetPrev();
+					instance->tickMutex.unlock();
+				}
+				else if (LOWORD(wParam) == IDC_OPACITY)
+				{
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_OPACITY), hDlg, OpacityProc);
+				}
+				else if (LOWORD(wParam) == IDC_TEXT)
+				{
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_TEXT), hDlg, TextProc);
+				}
+				else if (HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
+				{
+					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
+					HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+					if (dropDown != NULL)
+					{
+						instance->tickMutex.lock();
+						ComboBox_Enable(dropDown, !enabled);
+
+						if (enabled)
+						{
+							char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
+							strcpy(buf, "AUTO");
+							instance->configManager->UpdateSelectedAdapter(buf);
+							if (instance->settingsWnd != NULL)
+							{
+								instance->netManager->SetAutoAdaptor();
+								SendMessage(hDlg, WM_SETCBSEL, (WPARAM)FALSE, NULL);
+							}
+						}
+						else
+						{
+							instance->UpdateSelectedAdapter(dropDown);
+						}
+
+						instance->netManager->ResetPrev();
+						instance->tickMutex.unlock();
+					}
+				}
+				else if (HIWORD(wParam) == CBN_SELCHANGE)
+				{
+					HWND adapter = GetDlgItem(hDlg, IDC_ADAPTER_DD);
+
+
+					if (HWND(lParam) == adapter)
+					{
+						instance->tickMutex.lock();
+						instance->UpdateSelectedAdapter(HWND(lParam));
+						instance->netManager->ResetPrev();
+						instance->tickMutex.unlock();
+					}
+					else
+					{
+						instance->UpdateHoverSetting(HWND(lParam));
+					}	
+				}
+				break;
+		}
+		return (INT_PTR)FALSE;
+	}
+
+	void UIManager::UpdateSelectedAdapter(HWND dropDown)
+	{
+		int selIndex = SendMessage(dropDown, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+		WCHAR selItemName[IF_MAX_STRING_SIZE + 1];
+		selItemName[IF_MAX_STRING_SIZE] = 0;
+		SendMessage(dropDown, CB_GETLBTEXT, (WPARAM)selIndex, (LPARAM)selItemName);
+
+		//Match back up with address
+		for (int i = 0; i < instance->foundAdapters.size(); i++)
+		{
+			if (!wcscmp(selItemName, instance->foundAdapters[i].Description))
+			{
+				instance->configManager->UpdateSelectedAdapter((char*)instance->foundAdapters[i].PermanentPhysicalAddress);
+				break;
+			}
+		}
+	}
+
+	void UIManager::UpdateHoverSetting(HWND dropDown)
+	{
+		int selIndex = SendMessage(dropDown, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+		instance->configManager->UpdateHoverSetting(HOVER_ENUM(selIndex));
+	}
+
+	COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF * initCol, DWORD flags)
+	{
+		CHOOSECOLOR colorStruct = { 0 };
+		colorStruct.hwndOwner = owner;
+		colorStruct.lStructSize = sizeof(CHOOSECOLOR);
+		colorStruct.rgbResult = *initCol;
+		colorStruct.lpCustColors = instance->configManager->customColBuf;
+		colorStruct.Flags = flags;
+		ChooseColor(&colorStruct);
+
+		WORD h, l, s;
+		ColorRGBToHLS(colorStruct.rgbResult, &h, &l, &s);
+		COLORREF r = ColorHLSToRGB(h, l, s);
+		//return colorStruct.rgbResult;
+		return r;
+	}
+
+	INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_INITDIALOG:
+			{
+				HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
+				SendMessage(sliderCtrl, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELPARAM(MIN_OPACITY, MAX_OPACITY));
+				SendMessage(sliderCtrl, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)instance->configManager->opacity);
+				return (INT_PTR)TRUE;
+			}
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDOK)
+				{
+					HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
+					int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
+
+					if (newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
+					{
+						instance->configManager->UpdateOpacity(newVal);
+						instance->UpdateOpacity(instance->roothWnd);
+						instance->ForceRepaint();
+					}
+					else
+					{
+						DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_INVALID_INPUT), hDlg, AboutProc); //Just re-use this proc as it does the same thing
+					}
+
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				if (LOWORD(wParam) == IDCANCEL)
+				{
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				break;
+		}
+		return (INT_PTR)FALSE;
+	}
+
+	INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_INITDIALOG:
+			{
+				return (INT_PTR)TRUE;
+			}
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDOK)
+				{
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				else if (LOWORD(wParam) == IDC_FONT)
+				{
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_FONT_WARNING_NEW), hDlg, FontWarningProc);
+				}
+				else if (LOWORD(wParam) == IDC_UPLOAD_COL || LOWORD(wParam) == IDC_DOWNLOAD_COL)
+				{
+					bool isUploadCol = LOWORD(wParam) == IDC_UPLOAD_COL;
+
+					COLORREF rgbResult = instance->ShowColourDialog(hDlg,
+						isUploadCol ? instance->configManager->uploadTxtColour : instance->configManager->downloadTxtColour, CC_ANYCOLOR | CC_RGBINIT);
+
+					if (isUploadCol)
+					{
+						instance->configManager->UpdateUploadTextColour(rgbResult);
+					}
+					else
+					{
+						instance->configManager->UpdateDownloadTextColour(rgbResult);
+					}
+
+					instance->UpdateBitmapColours();
+				}
+				if (LOWORD(wParam) == IDCANCEL)
+				{
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				break;
+		}
+		return (INT_PTR)FALSE;
+	}
+
+	INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_INITDIALOG:
+				return (INT_PTR)TRUE;
+
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+				{
+					if (LOWORD(wParam) == IDOK)
+					{
+						ShowWindow(hDlg, SW_HIDE);
+
+						CHOOSEFONT fontStruct = { 0 };
+						fontStruct.lStructSize = sizeof(CHOOSEFONT);
+						fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY;
+						fontStruct.nSizeMin = 4;
+						fontStruct.nSizeMax = 12;
+						fontStruct.hwndOwner = hDlg;
+						fontStruct.lpLogFont = instance->configManager->currentFont;
+
+						if (ChooseFont(&fontStruct))
+						{
+							instance->configManager->UpdateFont(*fontStruct.lpLogFont);
+							instance->UpdateFontScaleForDPI();
+						}
+					}
+
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				break;
+		}
+		return (INT_PTR)FALSE;
+	}
+
+	HWND* UIManager::GetLicenseKeyArray(HWND hDlg)
+	{
+		HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
+		HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
+		HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
+		HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
+		HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
+
+		return new HWND[KEY_SIZE]{ lKeyInput1 , lKeyInput2, lKeyInput3, lKeyInput4, lKeyInput5 };
+	}
+
+	INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_REFRESHACTIVATIONSTATUS:
+			{
+
+				//HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
+				//HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
+				//HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
+				//HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
+				//HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
+
+				//HWND* lKeyInputs[5] = { &lKeyInput1 , &lKeyInput2, &lKeyInput3, &lKeyInput4, &lKeyInput5 };
+
+				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
+				HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
+				HWND aStatusText = GetDlgItem(hDlg, IDC_ACTIVATION_STATUS);
+				HWND aButton = GetDlgItem(hDlg, IDC_ACTIVATE);
+
+				ACTIVATION_STATE aState = instance->activationManager->GetActivationState();
+
+				switch (aState)
+				{
+					case ACTIVATION_STATE::ACTIVATED:
+					{
+						SetWindowText(aStatusText, L"Status: Activated");
+
+						for (int i = 0; i < KEY_SIZE; i++)
+						{
+							ShowWindow(lKeyInputs[i], FALSE);
+						}
+						ShowWindow(aButton, FALSE);
+						ShowWindow(emailInput, FALSE);
+						break;
+					}
+					case ACTIVATION_STATE::UNREGISTERED:
+					{
+						SetWindowText(aStatusText, L"Status: Unregistered");
+						break;
+					}
+					case ACTIVATION_STATE::TRIAL_EXPIRED:
+					{
+						SetWindowText(aStatusText, L"Status: Trial expired");
+						break;
+					}
+					case ACTIVATION_STATE::BYPASS_DETECT:
+					{
+						SetWindowText(aStatusText, L"Status: Bypass detected");
+						break;
+					}
+				}
+				break;
 
 				delete[] lKeyInputs;
 			}
-			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
+			case WM_INITDIALOG:
 			{
-				EndDialog(hDlg, LOWORD(wParam));
+				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
+
+				for (int i = 0; i < KEY_SIZE; i++)
+				{
+
+					//Restrict to numerical input only
+					DWORD currentStyle = GetWindowLong(lKeyInputs[i], GWL_STYLE);
+
+					SetWindowLongPtr(lKeyInputs[i], GWL_STYLE, (currentStyle | ES_NUMBER));
+				}
+
+				delete[] lKeyInputs;
+				SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
 				return (INT_PTR)TRUE;
 			}
-			break;
-		}
-	}
-	return (INT_PTR)FALSE;
-}
-
-INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	//Populate with pre-made themes, apply on selection...
-
-	UNREFERENCED_PARAMETER(lParam);
-	switch (message)
-	{
-		case WM_INITDIALOG:
-		{
-			HWND listCtrl = GetDlgItem(hDlg, IDC_THEMES_LIST);
-			if (listCtrl != NULL)
+			case WM_COMMAND:
 			{
-				SetWindowSubclass(listCtrl, ThemeListProc, 0, 0);
-
-				std::vector<Theme*>allThemes;
-				//Get available themes
-				Theme* slateGrey = themeManager->GetTheme(AVAILABLE_THEME::SLATE_GREY);
-				Theme* sunny = themeManager->GetTheme(AVAILABLE_THEME::SUNNY);
-				Theme* nightRider = themeManager->GetTheme(AVAILABLE_THEME::NIGHT_RIDER);
-				Theme* iceCool = themeManager->GetTheme(AVAILABLE_THEME::ICE_COOL);
-
-				allThemes.push_back(slateGrey);
-				allThemes.push_back(sunny);
-				allThemes.push_back(nightRider);
-				allThemes.push_back(iceCool);
-
-				for (int i = 0; i < allThemes.size(); i++)
+				if (LOWORD(wParam) == IDC_ACTIVATE)
 				{
-					LVITEM lvI = { 0 };
-					lvI.mask = LVIF_TEXT | LVIF_PARAM;
-					lvI.iItem = i;
-					lvI.iImage = i;
-					lvI.lParam = (LPARAM)allThemes[i];
-					lvI.pszText = allThemes[i]->name;
-
-					// Insert items into the list.
-					if (ListView_InsertItem(listCtrl, &lvI) == -1)
+					HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
+					HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
+					std::vector<WCHAR*> strVec; //Store buf from each segment here
+					bool abort = false;
+					for (int i = 0; i < KEY_SIZE; i++)
 					{
-						delete allThemes[i];
-					}
-				}
-			}
+						HWND lKeyInput = lKeyInputs[i];
+						int lTextLen = GetWindowTextLength(lKeyInput);
 
-			return (INT_PTR)TRUE;
+						if (lTextLen == 0)
+						{
+							abort = true;
+							break;
+						}
+
+						++lTextLen;
+
+						WCHAR* buf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
+						if (buf)
+						{
+							GetWindowText(lKeyInput, buf, lTextLen);
+
+							strVec.push_back(buf);
+						}
+					}
+
+					int keyArr[KEY_SIZE];
+
+					for (int i = 0; i < strVec.size(); i++)
+					{
+						if (!abort)
+						{
+							keyArr[i] = _wtoi(strVec[i]);
+						}
+						free(strVec[i]);
+					}
+
+					if (!abort)
+					{
+						//Get email address to use as key
+						int lTextLen = GetWindowTextLength(emailInput) + 1;
+
+						WCHAR* emailBuf = (WCHAR*)malloc(sizeof(WCHAR) * lTextLen);
+						if (emailBuf)
+						{
+							GetWindowText(emailInput, emailBuf, lTextLen);
+							instance->activationManager->TryActivate(keyArr, emailBuf);
+							free(emailBuf);
+						}
+
+						SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
+					}
+
+					delete[] lKeyInputs;
+				}
+				if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
+				{
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				break;
+			}
 		}
-		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		return (INT_PTR)FALSE;
+	}
+
+	INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		//Populate with pre-made themes, apply on selection...
+
+		UNREFERENCED_PARAMETER(lParam);
+		switch (message)
+		{
+			case WM_INITDIALOG:
 			{
 				HWND listCtrl = GetDlgItem(hDlg, IDC_THEMES_LIST);
 				if (listCtrl != NULL)
 				{
-					LVITEM lvI = { 0 };
-					lvI.mask = LVIF_PARAM;
+					SetWindowSubclass(listCtrl, ThemeListProc, 0, 0);
 
-					//Clean up items/theme instances
+					std::vector<Theme*>allThemes;
+					//Get available themes
+					Theme* slateGrey = themeManager->GetTheme(AVAILABLE_THEME::SLATE_GREY);
+					Theme* sunny = themeManager->GetTheme(AVAILABLE_THEME::SUNNY);
+					Theme* nightRider = themeManager->GetTheme(AVAILABLE_THEME::NIGHT_RIDER);
+					Theme* iceCool = themeManager->GetTheme(AVAILABLE_THEME::ICE_COOL);
 
-					while (ListView_GetItem(listCtrl, &lvI))
+					allThemes.push_back(slateGrey);
+					allThemes.push_back(sunny);
+					allThemes.push_back(nightRider);
+					allThemes.push_back(iceCool);
+
+					for (int i = 0; i < allThemes.size(); i++)
 					{
-						if (Theme* theme = (Theme*)lvI.lParam)
+						LVITEM lvI = { 0 };
+						lvI.mask = LVIF_TEXT | LVIF_PARAM;
+						lvI.iItem = i;
+						lvI.iImage = i;
+						lvI.lParam = (LPARAM)allThemes[i];
+						lvI.pszText = allThemes[i]->name;
+
+						// Insert items into the list.
+						if (ListView_InsertItem(listCtrl, &lvI) == -1)
 						{
-							delete theme;
+							delete allThemes[i];
 						}
-						ListView_DeleteItem(listCtrl, lvI.iItem);
 					}
 				}
 
-				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
 			}
-			break;
+			case WM_COMMAND:
+				if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+				{
+					HWND listCtrl = GetDlgItem(hDlg, IDC_THEMES_LIST);
+					if (listCtrl != NULL)
+					{
+						LVITEM lvI = { 0 };
+						lvI.mask = LVIF_PARAM;
+
+						//Clean up items/theme instances
+
+						while (ListView_GetItem(listCtrl, &lvI))
+						{
+							if (Theme* theme = (Theme*)lvI.lParam)
+							{
+								delete theme;
+							}
+							ListView_DeleteItem(listCtrl, lvI.iItem);
+						}
+					}
+
+					EndDialog(hDlg, LOWORD(wParam));
+					return (INT_PTR)TRUE;
+				}
+				break;
+		}
+		return (INT_PTR)FALSE;
 	}
-	return (INT_PTR)FALSE;
-}
 
-void UIManager::ForceRepaint()
-{
-	RECT rc;
-	GetClientRect(roothWnd, &rc);
-	InvalidateRect(roothWnd, &rc, FALSE);
-}
-
-void UIManager::ForceRepaintOnRect(HWND hWnd)
-{
-	RECT rc;
-	GetClientRect(hWnd, &rc);
-	InvalidateRect(hWnd, &rc, FALSE);
-}
-UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	switch (message)
+	void UIManager::ForceRepaint()
 	{
-		case WM_DESTROY: //Intercept this message from the colour picker so we know when to apply the selection
-			//Don't need to do it this way
-			//instance->configManager->OnColourPickerComplete();
-			break;
+		RECT rc;
+		GetClientRect(roothWnd, &rc);
+		InvalidateRect(roothWnd, &rc, FALSE);
 	}
-	return (INT_PTR)FALSE;
-}
+
+	void UIManager::ForceRepaintOnRect(HWND hWnd)
+	{
+		RECT rc;
+		GetClientRect(hWnd, &rc);
+		InvalidateRect(hWnd, &rc, FALSE);
+	}
+	UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		switch (message)
+		{
+			case WM_DESTROY: //Intercept this message from the colour picker so we know when to apply the selection
+				//Don't need to do it this way
+				//instance->configManager->OnColourPickerComplete();
+				break;
+		}
+		return (INT_PTR)FALSE;
+	}
