@@ -1,4 +1,4 @@
-#include "ThemeManager.h"
+	#include "ThemeManager.h"
 #include <fstream> 
 
 Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
@@ -83,6 +83,25 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Cascadia Code");
 
 			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Sunny");
+			break;
+		}
+		case AVAILABLE_THEME::GHOST:
+		{
+			COLORREF fg = RGB(145, 154, 31);
+			COLORREF bg = RGB(17, 17, 17);
+			COLORREF ut = RGB(145, 154, 31);
+			COLORREF dt = RGB(145, 154, 31);
+			int opacity = 135;
+
+			fontParams.lfHeight = -13;
+			fontParams.lfWeight = 400;
+			fontParams.lfOutPrecision = 3;
+			fontParams.lfClipPrecision = 2;
+			fontParams.lfQuality = 1;
+			fontParams.lfPitchAndFamily = 34;
+			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Verdana");
+
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Ghost");
 			break;
 		}
 	}

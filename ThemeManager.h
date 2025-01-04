@@ -30,7 +30,8 @@ enum AVAILABLE_THEME
 	SLATE_GREY,
 	ICE_COOL,
 	NIGHT_RIDER,
-	SUNNY
+	SUNNY,
+	GHOST
 };
 
 class ThemeManager

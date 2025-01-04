@@ -1901,11 +1901,13 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				Theme* sunny = themeManager->GetTheme(AVAILABLE_THEME::SUNNY);
 				Theme* nightRider = themeManager->GetTheme(AVAILABLE_THEME::NIGHT_RIDER);
 				Theme* iceCool = themeManager->GetTheme(AVAILABLE_THEME::ICE_COOL);
+				Theme* ghost = themeManager->GetTheme(AVAILABLE_THEME::GHOST);
 
 				allThemes.push_back(slateGrey);
 				allThemes.push_back(sunny);
 				allThemes.push_back(nightRider);
 				allThemes.push_back(iceCool);
+				allThemes.push_back(ghost);
 
 				for (int i = 0; i < allThemes.size(); i++)
 				{
