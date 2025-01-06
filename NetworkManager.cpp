@@ -10,7 +10,7 @@ NetworkManager::~NetworkManager()
 
 }
 
-//PURPOSE: Find currently active adaptor, cache it's position, then track the different between the previous In/Out octets vs the current
+//PURPOSE: Find currently active adaptor, then track the difference between the previous In/Out octets vs the current
 std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TABLE2* interfaces, UCHAR* override)
 {
 	countMutex.lock();
@@ -27,7 +27,7 @@ std::tuple<double, double> NetworkManager::GetAdaptorInfo(HWND hWnd, PMIB_IF_TAB
 			row = &interfaces[0]->Table[i];
 			if (row)
 			{
-				//In auto, this is our selected adapte
+				//In auto, this is our selected adapter
 				if (!strcmp((char*)override, "AUTO") && !strcmp((char*)currentPhysicalAddress, (char*)&row->PermanentPhysicalAddress))
 				{
 					adapterIndex = i;
@@ -101,7 +101,7 @@ void NetworkManager::ResetPrev(bool lock)
 	}
 }
 
-//Set currentPhysicalAddress to the auto-selected adapter
+//PURPOSE: Find relevant adapter and set as currentPhysicalAddress
 void NetworkManager::SetAutoAdaptor()
 {
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
@@ -124,7 +124,7 @@ void NetworkManager::SetAutoAdaptor()
 			{
 				//Find any interface that has incoming data, is marked as connected and not set as Unspecified medium type
 				if (row->InOctets <= 0 || row->MediaConnectState != MediaConnectStateConnected || row->PhysicalMediumType == NdisPhysicalMediumUnspecified
-					|| row->PhysicalAddressLength == 0)
+					|| row->PhysicalAddressLength == 0 || row->PhysicalMediumType == NdisPhysicalMediumBluetooth)
 				{
 					continue;
 				}
@@ -139,7 +139,6 @@ void NetworkManager::SetAutoAdaptor()
 				break;
 			}
 		}
-
 	}
 
 	//GetIfTable2 allocates memory for the tables, which we must delete
@@ -255,6 +254,7 @@ PMIB_TCPTABLE2 NetworkManager::GetAllocatedTcpTable()
 	return tcpTbl;
 }
 
+//PURPOSE: Get all active processes and return an ordered vector containing their current DL/UL speeds
 std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
 {
 	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();

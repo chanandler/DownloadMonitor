@@ -141,7 +141,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	mainThread.detach();
 
 #ifdef USE_ACTIVATION
-	//instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
+	instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
 #endif
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();
@@ -613,20 +613,29 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 		}
 		case WM_MOUSEHOVER:
 		{
+#ifdef USE_ACTIVATION
 			ACTIVATION_STATE aState = instance->activationManager->GetActivationState();
 			if (GetCapture() == instance->roothWnd || (instance->configManager->hoverSetting == HOVER_ENUM::DO_NOTHING
 				&& aState == ACTIVATION_STATE::ACTIVATED))  //Check if this window has mouse input
 			{
 				break;
 			}
-
+#else 
+			if (GetCapture() == instance->roothWnd)
+			{
+				break;
+			}
+#endif
 			POINT p;
 			p.x = GET_X_LPARAM(lParam);
 			p.y = GET_Y_LPARAM(lParam);
 			ClientToScreen(hWnd, &p);
 
+#ifdef USE_ACTIVATION
 			if (aState == ACTIVATION_STATE::ACTIVATED)
 			{
+#endif
+
 				if (instance->netManager->HasElevatedPrivileges())
 				{
 					instance->ShowTopConsumersToolTip(p);
@@ -635,7 +644,11 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				{
 					instance->ShowUnavailableTooptip(p, L"Process monitoring requires elevation (Left-click to attempt)", true);
 				}
+#ifdef USE_ACTIVATION
+
 			}
+#endif
+
 #ifdef USE_ACTIVATION
 			else
 			{
@@ -1541,7 +1554,6 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			else if (HIWORD(wParam) == CBN_SELCHANGE)
 			{
 				HWND adapter = GetDlgItem(hDlg, IDC_ADAPTER_DD);
-
 
 				if (HWND(lParam) == adapter)
 				{
