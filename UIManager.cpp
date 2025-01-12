@@ -698,17 +698,16 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			BitmapScaleInfo* info = instance->bmScaleInfo;
 			if (hWnd == instance->dlChildWindow)
 			{
-				TransparentBlt(hdc, info->xPos, info->yPos, info->width / ARROW_SIZE_DIV, info->height / ARROW_SIZE_DIV,
+				TransparentBlt(hdc, info->xPos, info->yPos, info->width, info->height,
 					instance->downloadIconHDC, 0, 0, instance->downloadIconBm.bmWidth, instance->downloadIconBm.bmHeight, RGB(0, 0, 0));
 
 				SetTextColor(hdc, *instance->configManager->downloadTxtColour);
-
 				ps.rcPaint.left += 15;
 				DrawText(hdc, instance->dlBuf, lstrlenW(instance->dlBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
 			}
 			else if (hWnd == instance->ulChildWindow)
 			{
-				TransparentBlt(hdc, info->xPos, info->yPos, info->width / ARROW_SIZE_DIV, info->height / ARROW_SIZE_DIV,
+				TransparentBlt(hdc, info->xPos, info->yPos, info->width, info->height,
 					instance->uploadIconHDC, 0, 0, instance->uploadIconBm.bmWidth, instance->uploadIconBm.bmHeight, RGB(0, 0, 0));
 
 				SetTextColor(hdc, *instance->configManager->uploadTxtColour);
@@ -1199,8 +1198,8 @@ void UIManager::UpdateBmScaleForDPI()
 	int scaledY = MulDiv(ARROW_Y_OFFSET, currDPI, USER_DEFAULT_SCREEN_DPI);
 
 	//Download and upload have the same dimensions so we can do this
-	int width = MulDiv(instance->downloadIconBm.bmWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int height = MulDiv(instance->downloadIconBm.bmHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int width = MulDiv(ARROW_SIZE, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int height = MulDiv(ARROW_SIZE, currDPI, USER_DEFAULT_SCREEN_DPI);
 
 	if (bmScaleInfo)
 	{

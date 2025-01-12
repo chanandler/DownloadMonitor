@@ -41,10 +41,10 @@
 #define MIN_OPACITY 15
 #define MAX_OPACITY 255
 
-#define ARROW_X_OFFSET 4
-#define ARROW_Y_OFFSET 4
-#define ARROW_SIZE_DIV 5
-#define MIN_ARROW_SCALE_DIV 2
+#define ARROW_X_OFFSET 3
+#define ARROW_Y_OFFSET 3
+
+#define ARROW_SIZE 15
 
 #define VERSION_NUMBER L"Version 0.95"
 
