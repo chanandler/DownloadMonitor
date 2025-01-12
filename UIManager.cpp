@@ -824,18 +824,16 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			{
 				case PBT_POWERSETTINGCHANGE:
 				{
-
 					POWERBROADCAST_SETTING* setting = (POWERBROADCAST_SETTING*)lParam;
 
 					if (setting->PowerSetting == GUID_SESSION_DISPLAY_STATUS && setting->Data[0])
 					{
-						//Reset prev/current dl/ul counts swhen we're waking from sleep
+						//Reset prev/current dl/ul counts when we're waking from sleep
 						instance->netManager->ResetPrev();
 					}
 
 					break;
 				}
-
 			}
 
 			break;
