@@ -14,7 +14,7 @@
 //Then when loading the activation status later, we check the key's current time against the expected time
 
 //TODO
-//Resiliance testing, try deleting modification time keys
+//Contact key manager server to verify key
 
 
 ActivationManager::ActivationManager()

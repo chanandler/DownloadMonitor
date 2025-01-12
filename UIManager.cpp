@@ -145,8 +145,6 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 #endif
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();
-
-	//Move to last known pos
 }
 
 void UIManager::UpdateBitmapColours()
@@ -454,9 +452,10 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetWindowLongPtr(hWnd, GWL_STYLE, (currentStyle & ~WS_MAXIMIZEBOX & ~WS_MINIMIZEBOX));
 
-	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
+
+	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	//Tray icon
 	trayIcon.cbSize = sizeof(NOTIFYICONDATA);
