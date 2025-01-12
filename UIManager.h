@@ -146,7 +146,6 @@ private:
 
 	bool running = false;
 
-
 	std::mutex tickMutex;
 
 	HWND roothWnd;

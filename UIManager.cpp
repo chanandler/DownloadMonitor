@@ -108,9 +108,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	monitorFinder = new MonitorData();
 	monitorFinder->BuildMonitorList();
 
-	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, DL_INITIAL_X,
+	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW, DL_INITIAL_X,
 		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
-	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW | WS_BORDER | WS_EX_CLIENTEDGE, UL_INITIAL_X,
+	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW, UL_INITIAL_X,
 		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
 
 	//Load upload/download bitmaps into HDC memory
@@ -147,7 +147,6 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	//ShowTopConsumersToolTip();
 
 	//Move to last known pos
-	//SetWindowPos(roothWnd, HWND_TOPMOST, configManager->lastX, configManager->lastY, 0, 0, SWP_NOSIZE);
 }
 
 void UIManager::UpdateBitmapColours()
@@ -455,6 +454,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 	SetWindowLongPtr(hWnd, GWL_STYLE, (currentStyle & ~WS_MAXIMIZEBOX & ~WS_MINIMIZEBOX));
 
+	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
@@ -670,8 +670,15 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
 			SetDCBrushColor(hdc, *instance->configManager->childColour);
 
+			SelectObject(hdc, brush);
 			FillRect(hdc, &ps.rcPaint, brush);
 			SetBkMode(hdc, TRANSPARENT);
+
+			//WS_BORDER is not behaving so handle the drawing of borders ourselves
+			HPEN hpenWhite = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+			SelectObject(hdc, hpenWhite);
+
+			Rectangle(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom);
 
 			LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
 			if (modFont && instance->fontScaleInfo)
@@ -711,6 +718,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			}
 			EndPaint(hWnd, &ps);
 			DeleteObject(txtFont);
+			DeleteObject(hpenWhite);
 			if (modFont)
 			{
 				free(modFont);
@@ -1116,7 +1124,7 @@ void UIManager::UpdatePosIfRequired()
 	int xPos = GetSystemMetrics(SM_CXSCREEN); //SM_CXSCREEN == primary monitor
 	xPos -= (xPos / 4);
 
-	SetWindowPos(roothWnd, HWND_TOPMOST, xPos, 0, 0, 0, SWP_NOSIZE);
+	SetWindowPos(roothWnd, NULL, xPos, 0, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 	WriteWindowPos();
 }
 
@@ -1128,8 +1136,8 @@ void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
 	int	scaledWidth = newRct->right - newRct->left;
 	int	scaledHeight = newRct->bottom - newRct->top;
 
-	SetWindowPos(hWnd, hWnd, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	SetWindowPos(hWnd, NULL, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER);
+	//SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	WriteWindowPos();
 }
@@ -1149,8 +1157,7 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 		scaledWidth = minWidth;
 	}
 
-	SetWindowPos(hWnd, hWnd, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	SetWindowPos(hWnd, NULL, scaledX, scaledY, scaledWidth, scaledHeight, NULL);
 }
 
 bool UIManager::IsOffScreen()
@@ -2014,6 +2021,7 @@ void UIManager::ForceRepaintOnRect(HWND hWnd)
 	GetClientRect(hWnd, &rc);
 	InvalidateRect(hWnd, &rc, FALSE);
 }
+
 UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
