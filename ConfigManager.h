@@ -15,6 +15,8 @@
 #define DOWNLOAD_TXT_COLOUR "DOWNLOAD_TXT_COLOUR"
 #define SELECTED_ADAPTER "SELECTED_ADAPTER"
 #define HOVER_MODE "HOVER_MODE"
+#define DRAW_BORDER "DRAW_BORDER"
+#define BORDER_W_H "BORDER_W_H"
 
 #define CFG_SHOW_ALL "SHOW_ALL"
 #define CFG_SHOW_WHEN_AVAILABLE "SHOW_WHEN_AVAILABLE"
@@ -74,6 +76,9 @@ private:
 public:
 	int lastX, lastY;
 	int opacity;
+
+	int borderWH;
+	bool drawBorder;
 	
 	char* uniqueAddr;
 
@@ -97,6 +102,10 @@ public:
 	void UpdateOpacity(int newopacity);
 
 	void UpdateHoverSetting(HOVER_ENUM newSetting);
+
+	void UpdateBorderEnabled(bool newBorder);
+
+	void UpdateBorderWH(int newWH);
 
 	void GetFullConfigPath(char* buf);
 

@@ -55,10 +55,14 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 		}
 		case ACTIVATION_STATE::BYPASS_DETECT:
 		{
-			//TODO allow people trying to bypass activation to still activate it legitimately
-			MessageBox(NULL, L"Activation bypass detected! Program will now exit", L"ActivationManager", MB_OK | MB_ICONHAND);
-			exit(-1);
-			return;
+			//Allow people attempting to bypass to activate legitimately...
+			int sel = MessageBox(NULL, L"Activation bypass detected! Would you like to activate legitimately?", L"ActivationManager", MB_YESNO | MB_ICONHAND);
+
+			if(sel != IDYES)
+			{
+				exit(-1);
+				return;
+			}
 		}
 		case ACTIVATION_STATE::TRIAL_EXPIRED:
 		{
@@ -135,6 +139,14 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	InitForDPI(ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
 	UpdatePosIfRequired();
+
+	/*RECT dlRc = { 0 };
+	GetWindowRect(dlChildWindow, &dlRc);
+	HRGN rgn = CreateRoundRectRgn(dlRc.left, dlRc.top, dlRc.right, dlRc.bottom, 1, 1);
+	if (rgn != NULL)
+	{
+		SetWindowRgn(dlChildWindow, rgn, TRUE);
+	}*/
 
 	running = true;
 	std::thread mainThread = std::thread(UpdateInfo);
@@ -667,17 +679,48 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			HDC hdc = BeginPaint(hWnd, &ps);				//CHILD WINDOW BACKGROUND COLOUR
 
 			HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
-			SetDCBrushColor(hdc, *instance->configManager->childColour);
+			SetBkMode(hdc, TRANSPARENT);
+
+			//No border/no rounded border = draw with childColour (This window's colour)
+			//Rounded border = Paint with background colour first as we will then paint a rounded region
+			SetDCBrushColor(hdc, (configManager->borderWH == 0 || !configManager->drawBorder)
+				? *instance->configManager->childColour
+				: *instance->configManager->foregroundColour);
 
 			SelectObject(hdc, brush);
 			FillRect(hdc, &ps.rcPaint, brush);
-			SetBkMode(hdc, TRANSPARENT);
 
-			//WS_BORDER is not behaving so handle the drawing of borders ourselves
-			HPEN hpenWhite = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
-			SelectObject(hdc, hpenWhite);
+			if (configManager->drawBorder)
+			{
+				//WS_BORDER is not behaving so handle the drawing of borders ourselves
+				HPEN hpenWhite = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
 
-			Rectangle(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom);
+				if (configManager->borderWH == 0)
+				{
+					SelectObject(hdc, hpenWhite);
+					Rectangle(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom);
+				}
+				else
+				{
+					//Draw window colour on-top of background via a rounded region
+					SetDCBrushColor(hdc, *instance->configManager->childColour);
+					HRGN rgn = CreateRoundRectRgn(ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom,
+						configManager->borderWH, configManager->borderWH);
+
+					if (rgn != NULL)
+					{
+						FillRgn(hdc, rgn, brush);
+
+						SelectObject(hdc, hpenWhite);
+						RoundRect(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom,
+							configManager->borderWH, configManager->borderWH);
+
+						DeleteObject(rgn);
+					}
+				}
+
+				DeleteObject(hpenWhite);
+			}
 
 			LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
 			if (modFont && instance->fontScaleInfo)
@@ -716,7 +759,6 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			}
 			EndPaint(hWnd, &ps);
 			DeleteObject(txtFont);
-			DeleteObject(hpenWhite);
 			if (modFont)
 			{
 				free(modFont);
@@ -1262,7 +1304,7 @@ INT_PTR CALLBACK UIManager::TrialExpiredProc(HWND hDlg, UINT message, WPARAM wPa
 			{
 				if (LOWORD(wParam) == IDACTIVATE)
 				{
-					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), NULL, ActivationProc);
+					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
 				}
 				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
@@ -1363,7 +1405,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			Button_Enable(textBtn, isActivated);
 
 			ComboBox_Enable(hoverDropdown, isActivated);
-
+			
 			break;
 		}
 		case WM_SETHOVERCBSEL:
@@ -1461,6 +1503,10 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			{
 				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_ACTIVATE), hDlg, ActivationProc);
 				SendMessage(hDlg, WM_SETFORACTIVATION, NULL, NULL);
+			}
+			else if (LOWORD(wParam) == IDC_BORDER)
+			{
+				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_BORDER), hDlg, BorderProc);
 			}
 			else if (LOWORD(wParam) == IDC_THEMES)
 			{
@@ -1653,6 +1699,62 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
 			}
+			break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK UIManager::BorderProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	switch (message)
+	{
+		case WM_INITDIALOG:
+		{
+			HWND sliderCtrl = GetDlgItem(hDlg, IDC_BORDER_CURVE);
+			SendMessage(sliderCtrl, TBM_SETRANGE, (WPARAM)TRUE, (LPARAM)MAKELPARAM(MIN_BORDER, MAX_BORDER));
+			SendMessage(sliderCtrl, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)instance->configManager->borderWH);
+
+			HWND borderToggle = GetDlgItem(hDlg, IDC_DRAW_BORDER);
+			Button_SetCheck(borderToggle, configManager->drawBorder);
+
+			return (INT_PTR)TRUE;
+		}
+		case WM_HSCROLL:
+		{
+			HWND sliderCtrl = GetDlgItem(hDlg, IDC_BORDER_CURVE);
+			int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
+
+			if (newVal <= MAX_BORDER && newVal >= MIN_BORDER)
+			{
+				instance->configManager->UpdateBorderWH(newVal);
+				instance->ForceRepaint();
+			}
+			break;
+		}
+		case WM_COMMAND:
+			if (LOWORD(wParam) == IDOK)
+			{
+				EndDialog(hDlg, LOWORD(wParam));
+				return (INT_PTR)TRUE;
+			}
+			else if (LOWORD(wParam) == IDCANCEL)
+			{
+				EndDialog(hDlg, LOWORD(wParam));
+				return (INT_PTR)TRUE;
+			}
+			else if (HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_DRAW_BORDER)
+			{
+				bool drawBorder = IsDlgButtonChecked(hDlg, IDC_DRAW_BORDER);
+				if (drawBorder != instance->configManager->drawBorder)
+				{
+					instance->configManager->UpdateBorderEnabled(drawBorder);
+				}
+
+				HWND slider = GetDlgItem(hDlg, IDC_BORDER_CURVE);
+				EnableWindow(slider, drawBorder);
+			}
+
 			break;
 	}
 	return (INT_PTR)FALSE;
@@ -1917,12 +2019,16 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				Theme* nightRider = themeManager->GetTheme(AVAILABLE_THEME::NIGHT_RIDER);
 				Theme* iceCool = themeManager->GetTheme(AVAILABLE_THEME::ICE_COOL);
 				Theme* ghost = themeManager->GetTheme(AVAILABLE_THEME::GHOST);
+				Theme* borderless = themeManager->GetTheme(AVAILABLE_THEME::BORDERLESS);
+				Theme* glasses = themeManager->GetTheme(AVAILABLE_THEME::GLASSES);
 
 				allThemes.push_back(slateGrey);
 				allThemes.push_back(sunny);
 				allThemes.push_back(nightRider);
 				allThemes.push_back(iceCool);
 				allThemes.push_back(ghost);
+				allThemes.push_back(borderless);
+				allThemes.push_back(glasses);
 
 				for (int i = 0; i < allThemes.size(); i++)
 				{

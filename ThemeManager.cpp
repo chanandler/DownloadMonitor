@@ -25,7 +25,7 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			fontParams.lfPitchAndFamily = 34;
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Tahoma");
 
-			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Slate Grey");
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Slate Grey");
 			break;
 		}
 		case AVAILABLE_THEME::ICE_COOL:
@@ -44,7 +44,7 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			fontParams.lfPitchAndFamily = 34;
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Liberation Sans");
 
-			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Ice Cool");
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Ice Cool");
 			break;
 		}
 		case AVAILABLE_THEME::NIGHT_RIDER:
@@ -63,7 +63,7 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			fontParams.lfPitchAndFamily = 49;
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Lucida Console");
 
-			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Night Rider");
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Night Rider");
 			break;
 		}
 		case AVAILABLE_THEME::SUNNY:
@@ -82,15 +82,15 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			fontParams.lfPitchAndFamily = 49;
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Cascadia Code");
 
-			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Sunny");
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Sunny");
 			break;
 		}
 		case AVAILABLE_THEME::GHOST:
 		{
-			COLORREF fg = RGB(145, 154, 31);
+			COLORREF fg = RGB(47, 47, 47);
 			COLORREF bg = RGB(17, 17, 17);
-			COLORREF ut = RGB(145, 154, 31);
-			COLORREF dt = RGB(145, 154, 31);
+			COLORREF ut = RGB(188, 188, 188);
+			COLORREF dt = RGB(188, 188, 188);
 			int opacity = 135;
 
 			fontParams.lfHeight = -13;
@@ -101,7 +101,45 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			fontParams.lfPitchAndFamily = 34;
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Verdana");
 
-			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, L"Ghost");
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Ghost");
+			break;
+		}
+		case AVAILABLE_THEME::BORDERLESS:
+		{
+			COLORREF fg = RGB(44, 44, 44);
+			COLORREF bg = RGB(44, 44, 44);
+			COLORREF ut = RGB(57, 249, 63);
+			COLORREF dt = RGB(255, 255, 255);
+			int opacity = 230;
+
+			fontParams.lfHeight = -13;
+			fontParams.lfWeight = 400;
+			fontParams.lfOutPrecision = 3;
+			fontParams.lfClipPrecision = 2;
+			fontParams.lfQuality = 1;
+			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Verdana");
+			fontParams.lfPitchAndFamily = 34;
+
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, false, 0, L"Borderless");
+			break;
+		}
+		case AVAILABLE_THEME::GLASSES:
+		{
+			COLORREF fg = RGB(0, 0, 0);
+			COLORREF bg = RGB(36, 29, 78);
+			COLORREF ut = RGB(20, 248, 26);
+			COLORREF dt = RGB(255, 255, 255);
+			int opacity = 230;
+
+			fontParams.lfHeight = -13;
+			fontParams.lfWeight = 400;
+			fontParams.lfOutPrecision = 3;
+			fontParams.lfClipPrecision = 2;
+			fontParams.lfQuality = 1;
+			fontParams.lfPitchAndFamily = 34;
+			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Yu Gothic UI");
+
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 20, L"Glasses");
 			break;
 		}
 	}

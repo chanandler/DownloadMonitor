@@ -41,6 +41,9 @@
 #define MIN_OPACITY 15
 #define MAX_OPACITY 255
 
+#define MIN_BORDER 0
+#define MAX_BORDER 50
+
 #define ARROW_X_OFFSET 3
 #define ARROW_Y_OFFSET 3
 
@@ -215,6 +218,7 @@ private:
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);
 	static INT_PTR OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static INT_PTR BorderProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR ThemesProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR TextProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);

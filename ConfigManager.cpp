@@ -109,6 +109,18 @@ void ConfigManager::UpdateHoverSetting(HOVER_ENUM newSetting)
 	WriteData();
 }
 
+void ConfigManager::UpdateBorderEnabled(bool newBorder)
+{
+	drawBorder = newBorder;
+	WriteData();
+}
+
+void ConfigManager::UpdateBorderWH(int newWH)
+{
+	borderWH = newWH;
+	WriteData();
+}
+
 void ConfigManager::GetFullConfigPath(char* buf)
 {
 	//Either pass in override dir or use appdata
@@ -124,6 +136,8 @@ void ConfigManager::ApplyTheme(Theme* newTheme)
 	*uploadTxtColour = newTheme->uploadTxtColour;
 	opacity = newTheme->opacity;
 	*currentFont = newTheme->font;
+	drawBorder = newTheme->border;
+	borderWH = newTheme->borderWH;
 
 	WriteData();
 }
@@ -191,13 +205,19 @@ void ConfigManager::WriteData()
 	char hover_buf[200];
 	sprintf_s(hover_buf, "%s=%s", HOVER_MODE, hSettingBuf);
 
+	char draw_border_buf[200];
+	sprintf_s(draw_border_buf, "%s=%s", DRAW_BORDER, drawBorder ? "TRUE" : "FALSE");
+
+	char border_w_h_buf[200];
+	sprintf_s(border_w_h_buf, "%s=%i", BORDER_W_H, borderWH);
+
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 	std::ofstream configFile(pathBuf);
 
 	// Write to the file
 	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n"
-		<< adapter_buf << "\n" << hover_buf << "\n";
+		<< adapter_buf << "\n" << hover_buf << "\n" << draw_border_buf << "\n" << border_w_h_buf << "\n";
 
 	configFile.close();
 }
@@ -367,6 +387,33 @@ bool ConfigManager::ReadData()
 			}
 
 			free(hMode);
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), DRAW_BORDER, 11))
+		{
+			char* borderEnabled = ProcessChar(dataStart);
+			if (!borderEnabled)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			drawBorder = !strcmp(borderEnabled, "TRUE");
+
+			free(borderEnabled);
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), BORDER_W_H, 11))
+		{
+			int val = ProcessInt(dataStart);
+			if (val == -1)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			borderWH = val;
+
 			++readCount;
 		}
 	}

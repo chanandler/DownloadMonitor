@@ -38,6 +38,7 @@
 #define IDC_TEXT                        112
 #define IDC_UPLOAD_COL                  113
 #define IDC_POPUP_NAME                  113
+#define IDC_BORDER                      113
 #define IDS_FIRST_COLUMN                114
 #define IDS_SECOND_COLUMN               115
 #define IDS_THIRD_COLUMN                116
@@ -46,6 +47,7 @@
 #define IDI_LOGO                        133
 #define IDD_FONT_WARNING_NEW            133
 #define IDI_ICON2                       134
+#define IDD_BORDER                      134
 #define IDB_BITMAP1                     136
 #define IDB_UP_ARROW                    136
 #define IDB_DOWN_ARROW                  140
@@ -72,6 +74,9 @@
 #define IDC_LIST4                       1026
 #define IDC_ACTIVATION_STATUS           1029
 #define IDACTIVATE                      1031
+#define IDC_DRAW_BORDER                 1032
+#define IDC_BORDER_CURVE                1033
+#define IDC_BORDER_GROUP                1034
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -81,7 +86,7 @@
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        141
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1032
+#define _APS_NEXT_CONTROL_VALUE         1035
 #define _APS_NEXT_SYMED_VALUE           110
 #endif
 #endif

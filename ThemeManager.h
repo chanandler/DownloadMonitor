@@ -10,10 +10,12 @@ public:
 	COLORREF downloadTxtColour;
 	LOGFONT font;
 	int opacity;
+	bool border;
+	int borderWH;
 
 	WCHAR name[250];
 
-	Theme(COLORREF FG, COLORREF BG, COLORREF UT, COLORREF DT, LOGFONT Font, int Opacity, const wchar_t Name[])
+	Theme(COLORREF FG, COLORREF BG, COLORREF UT, COLORREF DT, LOGFONT Font, int Opacity, bool Border, int BorderWH, const wchar_t Name[])
 	{
 		fgColour = FG;
 		bgColour = BG;
@@ -21,6 +23,8 @@ public:
 		downloadTxtColour = DT;
 		font = Font;
 		opacity = Opacity;
+		border = Border;
+		borderWH = BorderWH;
 		wcscpy_s(name, Name);
 	}
 };
@@ -31,7 +35,9 @@ enum AVAILABLE_THEME
 	ICE_COOL,
 	NIGHT_RIDER,
 	SUNNY,
-	GHOST
+	GHOST,
+	BORDERLESS,
+	GLASSES
 };
 
 class ThemeManager
