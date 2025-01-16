@@ -403,7 +403,7 @@ bool ConfigManager::ReadData()
 			free(borderEnabled);
 			++readCount;
 		}
-		else if (!strncmp(output.c_str(), BORDER_W_H, 11))
+		else if (!strncmp(output.c_str(), BORDER_W_H, 10))
 		{
 			int val = ProcessInt(dataStart);
 			if (val == -1)

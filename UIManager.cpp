@@ -58,7 +58,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 			//Allow people attempting to bypass to activate legitimately...
 			int sel = MessageBox(NULL, L"Activation bypass detected! Would you like to activate legitimately?", L"ActivationManager", MB_YESNO | MB_ICONHAND);
 
-			if(sel != IDYES)
+			if (sel != IDYES)
 			{
 				exit(-1);
 				return;
@@ -683,44 +683,45 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 
 			//No border/no rounded border = draw with childColour (This window's colour)
 			//Rounded border = Paint with background colour first as we will then paint a rounded region
-			SetDCBrushColor(hdc, (configManager->borderWH == 0 || !configManager->drawBorder)
+			SetDCBrushColor(hdc, (configManager->borderWH == 0)
 				? *instance->configManager->childColour
 				: *instance->configManager->foregroundColour);
 
 			SelectObject(hdc, brush);
 			FillRect(hdc, &ps.rcPaint, brush);
 
-			if (configManager->drawBorder)
+			//WS_BORDER is not behaving so handle the drawing of borders ourselves
+			HPEN hpenWhite = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+
+			if (configManager->drawBorder && configManager->borderWH == 0)
 			{
-				//WS_BORDER is not behaving so handle the drawing of borders ourselves
-				HPEN hpenWhite = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+				SelectObject(hdc, hpenWhite);
+				Rectangle(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom);
+			}
+			else if(configManager->borderWH != 0)
+			{
+				//Draw window colour on-top of background via a rounded region
+				SetDCBrushColor(hdc, *instance->configManager->childColour);
+				HRGN rgn = CreateRoundRectRgn(ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom,
+					configManager->borderWH, configManager->borderWH);
 
-				if (configManager->borderWH == 0)
+				if (rgn != NULL)
 				{
-					SelectObject(hdc, hpenWhite);
-					Rectangle(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom);
-				}
-				else
-				{
-					//Draw window colour on-top of background via a rounded region
-					SetDCBrushColor(hdc, *instance->configManager->childColour);
-					HRGN rgn = CreateRoundRectRgn(ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom,
-						configManager->borderWH, configManager->borderWH);
+					FillRgn(hdc, rgn, brush);
 
-					if (rgn != NULL)
+					if (configManager->drawBorder)
 					{
-						FillRgn(hdc, rgn, brush);
-
 						SelectObject(hdc, hpenWhite);
 						RoundRect(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom,
 							configManager->borderWH, configManager->borderWH);
-
-						DeleteObject(rgn);
 					}
-				}
 
-				DeleteObject(hpenWhite);
+					DeleteObject(rgn);
+				}
 			}
+
+			DeleteObject(hpenWhite);
+
 
 			LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
 			if (modFont && instance->fontScaleInfo)
@@ -1405,7 +1406,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			Button_Enable(textBtn, isActivated);
 
 			ComboBox_Enable(hoverDropdown, isActivated);
-			
+
 			break;
 		}
 		case WM_SETHOVERCBSEL:
@@ -1751,8 +1752,8 @@ INT_PTR CALLBACK UIManager::BorderProc(HWND hDlg, UINT message, WPARAM wParam, L
 					instance->configManager->UpdateBorderEnabled(drawBorder);
 				}
 
-				HWND slider = GetDlgItem(hDlg, IDC_BORDER_CURVE);
-				EnableWindow(slider, drawBorder);
+				//HWND slider = GetDlgItem(hDlg, IDC_BORDER_CURVE);
+				//EnableWindow(slider, drawBorder);
 			}
 
 			break;
