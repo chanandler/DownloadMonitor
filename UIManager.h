@@ -31,6 +31,7 @@
 #define WM_REFRESHACTIVATIONSTATUS (WM_USER + 3)
 #define WM_SETHOVERCBSEL (WM_USER + 4)
 #define WM_SETFORACTIVATION (WM_USER + 5)
+#define WM_UPDATECOLOUR (WM_USER + 6)
 #define ONE_SECOND 1000000
 
 #define MOVE_TO 1
@@ -216,7 +217,7 @@ private:
 	static INT_PTR TrialExpiredProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR SettingsProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags);
+	COLORREF ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags, LPARAM custData);
 	static INT_PTR OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR BorderProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static INT_PTR ActivationProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);

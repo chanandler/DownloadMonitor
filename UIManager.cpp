@@ -5,6 +5,8 @@
 #include "ThemeManager.h"
 #include "shlwapi.h"
 
+#include <iostream>
+#include <fstream>
 //TODO move this into manifest file along with DPI awareness setting
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
 name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
@@ -17,6 +19,7 @@ ActivationManager* UIManager::activationManager = NULL;
 ThemeManager* UIManager::themeManager = NULL;
 BOOL UIManager::hasChildMouseEvent = FALSE;
 BOOL UIManager::hasRootMouseEvent = FALSE;
+UINT colourOk;
 
 UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -140,6 +143,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 
 	UpdatePosIfRequired();
 
+	colourOk = RegisterWindowMessage(COLOROKSTRING);
 	/*RECT dlRc = { 0 };
 	GetWindowRect(dlChildWindow, &dlRc);
 	HRGN rgn = CreateRoundRectRgn(dlRc.left, dlRc.top, dlRc.right, dlRc.bottom, 1, 1);
@@ -698,7 +702,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				SelectObject(hdc, hpenWhite);
 				Rectangle(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right, ps.rcPaint.bottom);
 			}
-			else if(configManager->borderWH != 0)
+			else if (configManager->borderWH != 0)
 			{
 				//Draw window colour on-top of background via a rounded region
 				SetDCBrushColor(hdc, *instance->configManager->childColour);
@@ -1440,6 +1444,21 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 			break;
 		}
+		case WM_UPDATECOLOUR:
+		{
+			COLORREF rgbResult = (COLORREF)wParam;
+			if ((BOOL)lParam)
+			{
+				instance->configManager->UpdateForegroundColour(rgbResult);
+			}
+			else
+			{
+				instance->configManager->UpdateChildColour(rgbResult);
+			}
+
+			//Force repaint to apply colours
+			instance->ForceRepaint();
+		}
 		case WM_SETCBSEL:
 		{
 			//Init the adapter selection dropdown
@@ -1517,19 +1536,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			{
 				bool isPrimary = LOWORD(wParam) == IDC_PRIMARY_COLOUR;
 				COLORREF rgbResult = instance->ShowColourDialog(hDlg,
-					isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour, CC_ANYCOLOR | CC_RGBINIT);
-
-				if (isPrimary)
-				{
-					instance->configManager->UpdateForegroundColour(rgbResult);
-				}
-				else
-				{
-					instance->configManager->UpdateChildColour(rgbResult);
-				}
-
-				//Force repaint to apply colours
-				instance->ForceRepaint();
+					isPrimary ? instance->configManager->foregroundColour : instance->configManager->childColour, CC_ANYCOLOR | CC_RGBINIT, (LPARAM)isPrimary);
 			}
 			else if (LOWORD(wParam) == IDC_RESET_CONFIG)
 			{
@@ -1646,14 +1653,16 @@ void UIManager::UpdateHoverSetting(HWND dropDown)
 	instance->configManager->UpdateHoverSetting(HOVER_ENUM(selIndex));
 }
 
-COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags)
+COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags, LPARAM custData)
 {
 	CHOOSECOLOR colorStruct = { 0 };
 	colorStruct.hwndOwner = owner;
 	colorStruct.lStructSize = sizeof(CHOOSECOLOR);
 	colorStruct.rgbResult = *initCol;
 	colorStruct.lpCustColors = instance->configManager->customColBuf;
-	colorStruct.Flags = flags;
+	colorStruct.Flags = flags | CC_ENABLEHOOK;
+	colorStruct.lCustData = custData;
+	colorStruct.lpfnHook = &instance->ColourPickerProc;
 	ChooseColor(&colorStruct);
 
 	WORD h, l, s;
@@ -1675,23 +1684,24 @@ INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, 
 			SendMessage(sliderCtrl, TBM_SETPOS, (WPARAM)TRUE, (LPARAM)instance->configManager->opacity);
 			return (INT_PTR)TRUE;
 		}
+		case WM_HSCROLL:
+		{
+			HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
+			int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
+
+			if (newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
+			{
+				instance->configManager->UpdateOpacity(newVal);
+				instance->UpdateOpacity(instance->roothWnd);
+				instance->ForceRepaint();
+			}
+
+			break;
+		}
 		case WM_COMMAND:
+
 			if (LOWORD(wParam) == IDOK)
 			{
-				HWND sliderCtrl = GetDlgItem(hDlg, IDC_OPACITY_SLIDER);
-				int newVal = SendMessage(sliderCtrl, TBM_GETPOS, NULL, NULL);
-
-				if (newVal <= MAX_OPACITY && newVal >= MIN_OPACITY)
-				{
-					instance->configManager->UpdateOpacity(newVal);
-					instance->UpdateOpacity(instance->roothWnd);
-					instance->ForceRepaint();
-				}
-				else
-				{
-					DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_INVALID_INPUT), hDlg, AboutProc); //Just re-use this proc as it does the same thing
-				}
-
 				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
 			}
@@ -1770,6 +1780,20 @@ INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 		{
 			return (INT_PTR)TRUE;
 		}
+		case WM_UPDATECOLOUR:
+		{
+			COLORREF rgbResult = (COLORREF)wParam;
+			if ((BOOL)lParam)
+			{
+				instance->configManager->UpdateUploadTextColour(rgbResult);
+			}
+			else
+			{
+				instance->configManager->UpdateDownloadTextColour(rgbResult);
+			}
+
+			instance->UpdateBitmapColours();
+		}
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDOK)
 			{
@@ -1785,18 +1809,8 @@ INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 				bool isUploadCol = LOWORD(wParam) == IDC_UPLOAD_COL;
 
 				COLORREF rgbResult = instance->ShowColourDialog(hDlg,
-					isUploadCol ? instance->configManager->uploadTxtColour : instance->configManager->downloadTxtColour, CC_ANYCOLOR | CC_RGBINIT);
-
-				if (isUploadCol)
-				{
-					instance->configManager->UpdateUploadTextColour(rgbResult);
-				}
-				else
-				{
-					instance->configManager->UpdateDownloadTextColour(rgbResult);
-				}
-
-				instance->UpdateBitmapColours();
+					isUploadCol ? instance->configManager->uploadTxtColour : instance->configManager->downloadTxtColour, CC_ANYCOLOR | CC_RGBINIT,
+					(LPARAM)isUploadCol);
 			}
 			if (LOWORD(wParam) == IDCANCEL)
 			{
@@ -2125,14 +2139,64 @@ void UIManager::ForceRepaintOnRect(HWND hWnd)
 	InvalidateRect(hWnd, &rc, FALSE);
 }
 
+
+CHOOSECOLOR* startColData;
+BOOL stayOpen = FALSE;
 UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (message == colourOk)
+	{
+		//Get current colour
+		CHOOSECOLOR* colData = (CHOOSECOLOR*)lParam;
+		//WPARAM colorref LPARAM custdata
+		//Get parent
+		HWND parent = GetParent(hDlg);
+		SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)colData->rgbResult, (LPARAM)colData->lCustData);
+
+		//PostMessage(hDlg, IDABORT, NULL, NULL);
+		if (stayOpen == TRUE)
+		{
+			stayOpen = false;
+			return (INT_PTR)TRUE;
+		}
+
+		return (INT_PTR)FALSE;
+	}
+
+	//Intercept this message from the colour picker so we can apply the selection immediately
 	switch (message)
 	{
-		case WM_DESTROY: //Intercept this message from the colour picker so we know when to apply the selection
-			//Don't need to do it this way
-			//instance->configManager->OnColourPickerComplete();
+		case WM_COMMAND:
+		{
+			if(LOWORD(wParam) == IDCANCEL && startColData)
+			{
+				HWND parent = GetParent(hDlg);
+				SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)startColData->rgbResult, (LPARAM)startColData->lCustData);
+				free(startColData);
+				break;
+			}
 			break;
+		}
+		case WM_INITDIALOG:
+		{
+			//Copy this incase we cancel so we can revert
+			startColData = (CHOOSECOLOR*)malloc(sizeof(CHOOSECOLOR));
+			if (startColData)
+			{
+				memcpy(startColData, (CHOOSECOLOR*)lParam, sizeof(CHOOSECOLOR));
+			}
+			break;
+		}
+		case WM_LBUTTONUP:
+		{
+			stayOpen = TRUE; //Set to true so we know it's from ourself
+			SendMessage(hDlg, WM_COMMAND, (WPARAM)IDOK, NULL);
+			break;
+		}
+		case WM_DESTROY:
+		{
+			stayOpen = FALSE;
+		}
 	}
 	return (INT_PTR)FALSE;
 }
