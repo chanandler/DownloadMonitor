@@ -32,6 +32,7 @@
 #define WM_SETHOVERCBSEL (WM_USER + 4)
 #define WM_SETFORACTIVATION (WM_USER + 5)
 #define WM_UPDATECOLOUR (WM_USER + 6)
+#define WM_UPDATEFONT (WM_USER + 7)
 #define ONE_SECOND 1000000
 
 #define MOVE_TO 1
@@ -155,6 +156,7 @@ private:
 	HWND roothWnd;
 
 	HWND settingsWnd;
+	HWND fontWnd;
 
 	WCHAR dlBuf[200];
 	WCHAR ulBuf[200];
@@ -229,5 +231,6 @@ private:
 	void ForceRepaint();
 	void ForceRepaintOnRect(HWND hWnd);
 	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+	static UINT_PTR FontPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };
 

@@ -1761,6 +1761,7 @@ INT_PTR CALLBACK UIManager::BorderProc(HWND hDlg, UINT message, WPARAM wParam, L
 				{
 					instance->configManager->UpdateBorderEnabled(drawBorder);
 				}
+				instance->ForceRepaint();
 
 				//HWND slider = GetDlgItem(hDlg, IDC_BORDER_CURVE);
 				//EnableWindow(slider, drawBorder);
@@ -1778,6 +1779,7 @@ INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 	{
 		case WM_INITDIALOG:
 		{
+			instance->fontWnd = hDlg;
 			return (INT_PTR)TRUE;
 		}
 		case WM_UPDATECOLOUR:
@@ -1793,6 +1795,13 @@ INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			}
 
 			instance->UpdateBitmapColours();
+			instance->ForceRepaint();
+			break;
+		}
+		case WM_DESTROY:
+		{
+			instance->fontWnd = NULL;
+			break;
 		}
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDOK)
@@ -1812,7 +1821,7 @@ INT_PTR CALLBACK UIManager::TextProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 					isUploadCol ? instance->configManager->uploadTxtColour : instance->configManager->downloadTxtColour, CC_ANYCOLOR | CC_RGBINIT,
 					(LPARAM)isUploadCol);
 			}
-			if (LOWORD(wParam) == IDCANCEL)
+			else if (LOWORD(wParam) == IDCANCEL)
 			{
 				EndDialog(hDlg, LOWORD(wParam));
 				return (INT_PTR)TRUE;
@@ -1828,27 +1837,44 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 	switch (message)
 	{
 		case WM_INITDIALOG:
+		{
 			return (INT_PTR)TRUE;
-
+		}
+		case WM_UPDATEFONT:
+		{
+			LOGFONT* newFont = (LOGFONT*)lParam;
+			instance->configManager->UpdateFont(*newFont);
+			instance->UpdateFontScaleForDPI();
+			instance->ForceRepaint();
+			break;
+		}
 		case WM_COMMAND:
+		{
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 			{
 				if (LOWORD(wParam) == IDOK)
 				{
 					ShowWindow(hDlg, SW_HIDE);
 
+					LOGFONT* currentFontCopy = (LOGFONT*)malloc(sizeof(LOGFONT));
+					if (currentFontCopy) 
+					{
+						memcpy(currentFontCopy, instance->configManager->currentFont, sizeof(LOGFONT));
+					}
 					CHOOSEFONT fontStruct = { 0 };
 					fontStruct.lStructSize = sizeof(CHOOSEFONT);
-					fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY;
+					fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY | CF_ENABLEHOOK;
 					fontStruct.nSizeMin = 4;
 					fontStruct.nSizeMax = 12;
 					fontStruct.hwndOwner = hDlg;
-					fontStruct.lpLogFont = instance->configManager->currentFont;
+					fontStruct.lpLogFont = currentFontCopy;
+					fontStruct.lpfnHook = &instance->FontPickerProc;
 
-					if (ChooseFont(&fontStruct))
+					ChooseFont(&fontStruct);
+
+					if (currentFontCopy)
 					{
-						instance->configManager->UpdateFont(*fontStruct.lpLogFont);
-						instance->UpdateFontScaleForDPI();
+						free(currentFontCopy);
 					}
 				}
 
@@ -1856,6 +1882,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 				return (INT_PTR)TRUE;
 			}
 			break;
+		}
 	}
 	return (INT_PTR)FALSE;
 }
@@ -2139,6 +2166,9 @@ void UIManager::ForceRepaintOnRect(HWND hWnd)
 	InvalidateRect(hWnd, &rc, FALSE);
 }
 
+//These two procs are hacky ways to get the colour/font to update immediately instead of having to wait
+//for the user to click 'ok'
+
 
 CHOOSECOLOR* startColData;
 BOOL stayOpen = FALSE;
@@ -2148,10 +2178,19 @@ UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wP
 	{
 		//Get current colour
 		CHOOSECOLOR* colData = (CHOOSECOLOR*)lParam;
+
+		//Where we use black to mark transparency, don't allow pure 0,0,0 as a text colour
+		if(colData->hwndOwner == instance->fontWnd && colData->rgbResult == 0)
+		{
+			++colData->rgbResult;
+		}
+
 		//WPARAM colorref LPARAM custdata
-		//Get parent
 		HWND parent = GetParent(hDlg);
-		SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)colData->rgbResult, (LPARAM)colData->lCustData);
+		if (parent != NULL) 
+		{
+			SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)colData->rgbResult, (LPARAM)colData->lCustData);
+		}
 
 		//PostMessage(hDlg, IDABORT, NULL, NULL);
 		if (stayOpen == TRUE)
@@ -2168,12 +2207,13 @@ UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wP
 	{
 		case WM_COMMAND:
 		{
-			if(LOWORD(wParam) == IDCANCEL && startColData)
+			if (LOWORD(wParam) == IDCANCEL && startColData)
 			{
 				HWND parent = GetParent(hDlg);
-				SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)startColData->rgbResult, (LPARAM)startColData->lCustData);
-				free(startColData);
-				break;
+				if (parent != NULL) 
+				{
+					SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)startColData->rgbResult, (LPARAM)startColData->lCustData);
+				}
 			}
 			break;
 		}
@@ -2196,6 +2236,73 @@ UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wP
 		case WM_DESTROY:
 		{
 			stayOpen = FALSE;
+			if (startColData)
+			{
+				free(startColData);
+			}
+		}
+	}
+	return (INT_PTR)FALSE;
+}
+
+LOGFONT* startFontData;
+BOOL updateOnNext = FALSE;
+UINT_PTR CALLBACK UIManager::FontPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if(updateOnNext)
+	{
+		updateOnNext = FALSE;
+		HWND parent = GetParent(hDlg);
+		if (parent != NULL)
+		{
+			//Get current LOGFONT from the dlg box
+			LOGFONT fontSel = { 0 };
+			SendMessage(hDlg, WM_CHOOSEFONT_GETLOGFONT, NULL, (LPARAM)&fontSel);
+
+			//Pass back to our parent
+			SendMessage(parent, WM_UPDATEFONT, NULL, (LPARAM)&fontSel);
+		}
+	}
+
+	//Intercept this message from the colour picker so we can apply the selection immediately
+	switch (message)
+	{
+		case WM_COMMAND:
+		{
+			if (LOWORD(wParam) == IDCANCEL && startFontData)
+			{
+				HWND parent = GetParent(hDlg);
+				if (parent != NULL)
+				{
+					SendMessage(parent, WM_UPDATEFONT, NULL, (LPARAM)startFontData);
+				}
+			}
+			else if(HIWORD(wParam) == CBN_SELCHANGE)
+			{
+				//We're catching this message before the window has processed it
+				//So let it update the font, then we update our logic on the next iteration
+				updateOnNext = TRUE;
+			}
+			break;
+		}
+		case WM_INITDIALOG:
+		{
+			//Copy this incase we cancel so we can revert
+			CHOOSEFONT* ch = (CHOOSEFONT*)lParam;
+			startFontData = (LOGFONT*)malloc(sizeof(LOGFONT));
+			if (startFontData)
+			{
+				memcpy(startFontData, (LOGFONT*)ch->lpLogFont, sizeof(LOGFONT));
+			}
+			break;
+		}
+		case WM_DESTROY:
+		{
+			if (startFontData)
+			{
+				free(startFontData);
+			}
+			break;
 		}
 	}
 	return (INT_PTR)FALSE;
