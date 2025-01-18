@@ -1857,7 +1857,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 					ShowWindow(hDlg, SW_HIDE);
 
 					LOGFONT* currentFontCopy = (LOGFONT*)malloc(sizeof(LOGFONT));
-					if (currentFontCopy) 
+					if (currentFontCopy)
 					{
 						memcpy(currentFontCopy, instance->configManager->currentFont, sizeof(LOGFONT));
 					}
@@ -2180,14 +2180,14 @@ UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wP
 		CHOOSECOLOR* colData = (CHOOSECOLOR*)lParam;
 
 		//Where we use black to mark transparency, don't allow pure 0,0,0 as a text colour
-		if(colData->hwndOwner == instance->fontWnd && colData->rgbResult == 0)
+		if (colData->hwndOwner == instance->fontWnd && colData->rgbResult == 0)
 		{
 			++colData->rgbResult;
 		}
 
 		//WPARAM colorref LPARAM custdata
 		HWND parent = GetParent(hDlg);
-		if (parent != NULL) 
+		if (parent != NULL)
 		{
 			SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)colData->rgbResult, (LPARAM)colData->lCustData);
 		}
@@ -2210,7 +2210,7 @@ UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wP
 			if (LOWORD(wParam) == IDCANCEL && startColData)
 			{
 				HWND parent = GetParent(hDlg);
-				if (parent != NULL) 
+				if (parent != NULL)
 				{
 					SendMessage(parent, WM_UPDATECOLOUR, (WPARAM)startColData->rgbResult, (LPARAM)startColData->lCustData);
 				}
@@ -2246,25 +2246,9 @@ UINT_PTR CALLBACK UIManager::ColourPickerProc(HWND hDlg, UINT message, WPARAM wP
 }
 
 LOGFONT* startFontData;
-BOOL updateOnNext = FALSE;
 UINT_PTR CALLBACK UIManager::FontPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	if(updateOnNext)
-	{
-		updateOnNext = FALSE;
-		HWND parent = GetParent(hDlg);
-		if (parent != NULL)
-		{
-			//Get current LOGFONT from the dlg box
-			LOGFONT fontSel = { 0 };
-			SendMessage(hDlg, WM_CHOOSEFONT_GETLOGFONT, NULL, (LPARAM)&fontSel);
-
-			//Pass back to our parent
-			SendMessage(parent, WM_UPDATEFONT, NULL, (LPARAM)&fontSel);
-		}
-	}
-
-	//Intercept this message from the colour picker so we can apply the selection immediately
+	//Intercept this message from the font picker so we can apply the selection immediately
 	switch (message)
 	{
 		case WM_COMMAND:
@@ -2277,11 +2261,23 @@ UINT_PTR CALLBACK UIManager::FontPickerProc(HWND hDlg, UINT message, WPARAM wPar
 					SendMessage(parent, WM_UPDATEFONT, NULL, (LPARAM)startFontData);
 				}
 			}
-			else if(HIWORD(wParam) == CBN_SELCHANGE)
+			/*else if (HIWORD(wParam) == CBN_SELCHANGE)
 			{
-				//We're catching this message before the window has processed it
-				//So let it update the font, then we update our logic on the next iteration
-				updateOnNext = TRUE;
+			}*/
+			break;
+		}
+		//Not sure what this message is but it gets sent after the font has been updated
+		//Relying on CBN_SELCHANGE was too early as we recieve messages here before the dlg window
+		case 792:
+		{
+			LOGFONT fontSel = { 0 };
+			SendMessage(hDlg, WM_CHOOSEFONT_GETLOGFONT, NULL, (LPARAM)&fontSel);
+
+			HWND parent = GetParent(hDlg);
+			if (parent != NULL)
+			{
+				//Pass back to our parent
+				SendMessage(parent, WM_UPDATEFONT, NULL, (LPARAM)&fontSel);
 			}
 			break;
 		}
@@ -2305,5 +2301,6 @@ UINT_PTR CALLBACK UIManager::FontPickerProc(HWND hDlg, UINT message, WPARAM wPar
 			break;
 		}
 	}
+
 	return (INT_PTR)FALSE;
 }
