@@ -52,6 +52,13 @@
 
 #define VERSION_NUMBER L"Version 0.95"
 
+//Fonts use 72 point
+//Ideally we would want to have font sizes < 8/-15
+//But the dialog box won't display those for some reason
+//So apply an offset internally
+#define FONT_SCALE_DPI 72
+#define FONT_OFFSET 4
+
 //Base values before any DPI scaling
 #define ROOT_INITIAL_WIDTH 220
 #define ROOT_INITIAL_HEIGHT 28

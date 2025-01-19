@@ -744,13 +744,17 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			SelectObject(hdc, txtFont);
 
 			BitmapScaleInfo* info = instance->bmScaleInfo;
+
+			int currDPI = GetDpiForWindow(hWnd);
+
 			if (hWnd == instance->dlChildWindow)
 			{
 				TransparentBlt(hdc, info->xPos, info->yPos, info->width, info->height,
 					instance->downloadIconHDC, 0, 0, instance->downloadIconBm.bmWidth, instance->downloadIconBm.bmHeight, RGB(0, 0, 0));
 
 				SetTextColor(hdc, *instance->configManager->downloadTxtColour);
-				ps.rcPaint.left += 15;
+				ps.rcPaint.left += MulDiv(15, currDPI, USER_DEFAULT_SCREEN_DPI);
+
 				DrawText(hdc, instance->dlBuf, lstrlenW(instance->dlBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
 			}
 			else if (hWnd == instance->ulChildWindow)
@@ -759,7 +763,8 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 					instance->uploadIconHDC, 0, 0, instance->uploadIconBm.bmWidth, instance->uploadIconBm.bmHeight, RGB(0, 0, 0));
 
 				SetTextColor(hdc, *instance->configManager->uploadTxtColour);
-				ps.rcPaint.right += 15;
+
+				ps.rcPaint.right += MulDiv(15, currDPI, USER_DEFAULT_SCREEN_DPI);
 				DrawText(hdc, instance->ulBuf, lstrlenW(instance->ulBuf), &ps.rcPaint, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOCLIP);
 			}
 			EndPaint(hWnd, &ps);
@@ -1225,8 +1230,8 @@ void UIManager::UpdateFontScaleForDPI()
 {
 	int currDPI = GetDpiForWindow(roothWnd);
 
-	int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, USER_DEFAULT_SCREEN_DPI);
-	int scaledHeight = MulDiv(configManager->currentFont->lfHeight, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int scaledWidth = MulDiv(configManager->currentFont->lfWidth, currDPI, FONT_SCALE_DPI);
+	int scaledHeight = MulDiv(configManager->currentFont->lfHeight + FONT_OFFSET, currDPI, FONT_SCALE_DPI);
 
 	if (fontScaleInfo)
 	{
@@ -1864,7 +1869,7 @@ INT_PTR CALLBACK UIManager::FontWarningProc(HWND hDlg, UINT message, WPARAM wPar
 					CHOOSEFONT fontStruct = { 0 };
 					fontStruct.lStructSize = sizeof(CHOOSEFONT);
 					fontStruct.Flags = CF_INITTOLOGFONTSTRUCT | CF_NOVERTFONTS | CF_LIMITSIZE | CF_SCALABLEONLY | CF_ENABLEHOOK;
-					fontStruct.nSizeMin = 4;
+					fontStruct.nSizeMin = 8;
 					fontStruct.nSizeMax = 12;
 					fontStruct.hwndOwner = hDlg;
 					fontStruct.lpLogFont = currentFontCopy;
@@ -2063,6 +2068,9 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				Theme* ghost = themeManager->GetTheme(AVAILABLE_THEME::GHOST);
 				Theme* borderless = themeManager->GetTheme(AVAILABLE_THEME::BORDERLESS);
 				Theme* glasses = themeManager->GetTheme(AVAILABLE_THEME::GLASSES);
+				Theme* steamPunk = themeManager->GetTheme(AVAILABLE_THEME::STEAM_PUNK);
+				Theme* clean = themeManager->GetTheme(AVAILABLE_THEME::CLEAN);
+				Theme* digital = themeManager->GetTheme(AVAILABLE_THEME::DIGITAL);
 
 				allThemes.push_back(slateGrey);
 				allThemes.push_back(sunny);
@@ -2071,6 +2079,9 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				allThemes.push_back(ghost);
 				allThemes.push_back(borderless);
 				allThemes.push_back(glasses);
+				allThemes.push_back(steamPunk);
+				allThemes.push_back(clean);
+				allThemes.push_back(digital);
 
 				for (int i = 0; i < allThemes.size(); i++)
 				{
