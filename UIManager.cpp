@@ -2071,6 +2071,7 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				Theme* steamPunk = themeManager->GetTheme(AVAILABLE_THEME::STEAM_PUNK);
 				Theme* clean = themeManager->GetTheme(AVAILABLE_THEME::CLEAN);
 				Theme* digital = themeManager->GetTheme(AVAILABLE_THEME::DIGITAL);
+				Theme* orange = themeManager->GetTheme(AVAILABLE_THEME::ORANGE);
 
 				allThemes.push_back(slateGrey);
 				allThemes.push_back(sunny);
@@ -2082,6 +2083,7 @@ INT_PTR CALLBACK UIManager::ThemesProc(HWND hDlg, UINT message, WPARAM wParam, L
 				allThemes.push_back(steamPunk);
 				allThemes.push_back(clean);
 				allThemes.push_back(digital);
+				allThemes.push_back(orange);
 
 				for (int i = 0; i < allThemes.size(); i++)
 				{

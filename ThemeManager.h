@@ -40,7 +40,8 @@ enum AVAILABLE_THEME
 	GLASSES,
 	STEAM_PUNK,
 	CLEAN,
-	DIGITAL
+	DIGITAL,
+	ORANGE
 };
 
 class ThemeManager

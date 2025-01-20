@@ -188,7 +188,7 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			COLORREF dt = RGB(38, 255, 0);
 			int opacity = 230;
 
-			fontParams.lfHeight = -12;
+			fontParams.lfHeight = -13;
 			fontParams.lfWeight = 400;
 			fontParams.lfOutPrecision = 3;
 			fontParams.lfClipPrecision = 2;
@@ -197,6 +197,25 @@ Theme* ThemeManager::GetTheme(AVAILABLE_THEME reqTheme)
 			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"OCR A Extended");
 
 			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Digital");
+			break;
+		}
+		case AVAILABLE_THEME::ORANGE:
+		{
+			COLORREF fg = RGB(232, 98, 74);
+			COLORREF bg = RGB(35, 35, 35);
+			COLORREF ut = RGB(232, 98, 74);
+			COLORREF dt = RGB(232, 98, 74);
+			int opacity = 230;
+
+			fontParams.lfHeight = -15;
+			fontParams.lfWeight = 400;
+			fontParams.lfOutPrecision = 3;
+			fontParams.lfClipPrecision = 2;
+			fontParams.lfQuality = 1;
+			fontParams.lfPitchAndFamily = 34;
+			wcscpy_s(fontParams.lfFaceName, LF_FACESIZE, L"Arial Rounded MT Bold");
+
+			ret = new Theme(fg, bg, ut, dt, fontParams, opacity, true, 0, L"Orange");
 			break;
 		}
 	}
