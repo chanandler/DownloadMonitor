@@ -1920,7 +1920,6 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 	{
 		case WM_REFRESHACTIVATIONSTATUS:
 		{
-
 			//HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
 			//HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
 			//HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);

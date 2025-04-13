@@ -22,7 +22,7 @@
 #include <map>
 
 //All activation related code is wrapped around this define
-#define USE_ACTIVATION 
+//#define USE_ACTIVATION 
 
 #define MAX_LOADSTRING 100
 #define WM_TRAYMESSAGE (WM_USER + 1)

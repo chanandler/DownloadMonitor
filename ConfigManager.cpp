@@ -739,7 +739,14 @@ void ConfigManager::InitDefaults()
 
 	if (themeManagerRef)
 	{
-		ApplyTheme(themeManagerRef->GetTheme(AVAILABLE_THEME::SLATE_GREY));
+		Theme* newTheme = themeManagerRef->GetTheme(AVAILABLE_THEME::SLATE_GREY);
+		if (!newTheme) 
+		{
+			return;
+		}
+
+		ApplyTheme(newTheme);
+		delete newTheme;
 	}
 }
 
