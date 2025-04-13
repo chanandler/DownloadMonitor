@@ -1463,13 +1463,21 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 			//Force repaint to apply colours
 			instance->ForceRepaint();
+			break;
 		}
 		case WM_SETCBSEL:
 		{
 			//Init the adapter selection dropdown
-			BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
 			HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
 
+			////Clear prev entries
+			//int count = SendMessage(dropDown, CB_GETCOUNT, NULL, NULL);
+			//for (int i = 0; i < count; i++)
+			//{
+			//	SendMessage(dropDown, CB_DELETESTRING, (WPARAM)i, NULL);
+			//}
+
+			BOOL autoMode = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
 			BOOL addToDD = (BOOL)wParam;
 
 			if (dropDown != NULL)
@@ -1517,6 +1525,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			break;
 		}
 		case WM_COMMAND:
+		{
 			if (LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)
 			{
 				instance->foundAdapters.clear();
@@ -1630,6 +1639,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				}
 			}
 			break;
+		}
 	}
 	return (INT_PTR)FALSE;
 }
