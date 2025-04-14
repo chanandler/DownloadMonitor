@@ -1694,8 +1694,10 @@ COLORREF UIManager::ShowColourDialog(HWND owner, COLORREF* initCol, DWORD flags,
 	WORD h, l, s;
 	ColorRGBToHLS(colorStruct.rgbResult, &h, &l, &s);
 	COLORREF r = ColorHLSToRGB(h, l, s);
+
+	return RGB(GetRValue(colorStruct.rgbResult), GetGValue(colorStruct.rgbResult), GetBValue(colorStruct.rgbResult));
 	//return colorStruct.rgbResult;
-	return r;
+	//return r;
 }
 
 INT_PTR CALLBACK UIManager::OpacityProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)

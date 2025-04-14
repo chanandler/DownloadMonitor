@@ -8,10 +8,10 @@
 ConfigManager::ConfigManager(LPWSTR configDirOverride, ThemeManager* themeManager)
 {
 	themeManagerRef = themeManager;
-	customColBuf = (COLORREF*)malloc(sizeof(COLORREF));
+	customColBuf = (COLORREF*)malloc(16 * sizeof(COLORREF));
 	if (customColBuf)
 	{
-		memset(customColBuf, 0, sizeof(COLORREF));
+		memset(customColBuf, 0, 16 * sizeof(COLORREF));
 	}
 	foregroundColour = (COLORREF*)malloc(sizeof(COLORREF));
 	childColour = (COLORREF*)malloc(sizeof(COLORREF));
