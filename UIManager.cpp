@@ -1119,7 +1119,7 @@ void UIManager::ShowTopConsumersToolTip(POINT pos)
 
 	SetWindowSubclass(lvHeader, PopupProc, 0, 0);
 
-	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, totalWidth);
+	InitForDPI(popup, POPUP_INITIAL_WIDTH, POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, totalWidth, true);
 }
 
 void UIManager::ShowUnavailableTooptip(POINT pos, const WCHAR* msg, bool AllowElevate)
@@ -1158,7 +1158,7 @@ void UIManager::ShowUnavailableTooptip(POINT pos, const WCHAR* msg, bool AllowEl
 	HideCaret(errPopup);
 	SetClassLongPtr(errPopup, GCLP_HCURSOR, (LONG_PTR)LoadCursor(nullptr, IDC_ARROW));
 
-	InitForDPI(errPopup, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, pos.x, pos.y, true);
+	InitForDPI(errPopup, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, -1, true);
 }
 
 void UIManager::UpdatePosIfRequired()
@@ -1190,7 +1190,7 @@ void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
 	WriteWindowPos();
 }
 
-void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos, int minWidth)
+void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int initialX, int initialY, bool dontScalePos, int minWidth, bool negateWidth)
 {
 	int currDPI = GetDpiForWindow(hWnd);
 
@@ -1203,6 +1203,17 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 	if (minWidth != -1 && scaledWidth < minWidth)
 	{
 		scaledWidth = minWidth;
+	}
+
+	//See if width extends beyond monitor bounds and if so, align reverse
+	HMONITOR currentMonitor = MonitorFromWindow(roothWnd, MONITOR_DEFAULTTONEAREST);
+	MONITORINFOEX monitorInfo;
+	monitorInfo.cbSize = sizeof(MONITORINFOEX);
+	GetMonitorInfo(currentMonitor, &monitorInfo);
+
+	if (negateWidth && scaledX + scaledWidth >= monitorInfo.rcWork.right) //If we need to display tooltip the other way (at edge of screen bounds)
+	{
+		scaledX -= (scaledWidth * 0.95f); //Keep a little bit under cursor so drag-off check works
 	}
 
 	SetWindowPos(hWnd, NULL, scaledX, scaledY, scaledWidth, scaledHeight, NULL);
