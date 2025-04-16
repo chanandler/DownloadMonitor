@@ -1155,6 +1155,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					}
 					
 				}
+
+				DeleteObject(hPenUser);
 			}
 
 			EndPaint(hWnd, &ps);
@@ -1162,6 +1164,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		}
 		case WM_DRAWGRAPH: 
 		{
+			//TODO save if graph is open
 			int currDPI = GetDpiForWindow(hWnd);
 
 			//Get current net usage
@@ -1218,7 +1221,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					widthLimit = ulRc.right;
 				}
 
-				newYPos = rc.bottom - ((rc.bottom - maxHeight) * nrmUsage);
+				newYPos = (rc.bottom * 0.9) - (((rc.bottom * 0.9) - maxHeight) * nrmUsage);
 
 				for (int j = 0; j < prevPositions->size(); j++)
 				{
@@ -1391,6 +1394,7 @@ void UIManager::ShowUnavailableTooptip(POINT pos, const WCHAR* msg, bool AllowEl
 	SetClassLongPtr(errPopup, GCLP_HCURSOR, (LONG_PTR)LoadCursor(nullptr, IDC_ARROW));
 
 	InitForDPI(errPopup, NO_PRIV_POPUP_INITIAL_WIDTH, NO_PRIV_POPUP_INITIAL_HEIGHT, pos.x, pos.y, true, -1, true);
+	DeleteObject(txtFont);
 }
 
 void UIManager::UpdatePosIfRequired()

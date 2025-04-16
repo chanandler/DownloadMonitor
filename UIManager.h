@@ -51,7 +51,7 @@
 
 #define ARROW_SIZE 15
 
-#define GRAPH_STEP 8
+#define GRAPH_STEP 2
 
 #define VERSION_NUMBER L"Version 0.95"
 
