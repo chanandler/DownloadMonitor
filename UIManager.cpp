@@ -258,6 +258,13 @@ UIManager::~UIManager()
 	delete monitorFinder;
 }
 
+void UIManager::DrawGraph()
+{
+	//HDC dc = GetDC(roothWnd);
+
+	//Graphics graphics(dc);
+}
+
 void UIManager::UpdateInfo()
 {
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
@@ -375,10 +382,44 @@ void UIManager::UpdateInfo()
 			}
 		}
 
+		if (instance->ShouldDrawGraph())
+		{
+			SendMessage(instance->roothWnd, WM_DRAWGRAPH, (LPARAM)dl, (WPARAM)ul);
+		}
+		else
+		{
+			if (instance->dlGraphPositions.size() > 0) 
+			{
+				instance->dlGraphPositions.clear();
+			}
+			if (instance->ulGraphPositions.size() > 0)
+			{
+				instance->ulGraphPositions.clear();
+			}
+		}
 		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
 	}
 
 	free(interfaces);
+}
+
+bool UIManager::ShouldDrawGraph()
+{
+	RECT parentRc = { 0 };
+	RECT childRc = { 0 };
+
+	GetWindowRect(instance->roothWnd, &parentRc);
+	GetWindowRect(instance->dlChildWindow, &childRc);
+	int minVal = GetDPIAwareGraphHeight();
+
+
+	return (parentRc.bottom - childRc.bottom >= minVal);
+}
+
+int UIManager::GetDPIAwareGraphHeight() 
+{
+	int currDPI = GetDpiForWindow(instance->roothWnd);
+	return MulDiv(MIN_GRAPH_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 }
 
 WCHAR* UIManager::GetStringFromBits(double inBits)
@@ -597,6 +638,7 @@ float UIManager::DivLower(float a, float b)
 	return b / a;
 }
 
+
 //For child windows which hold DL/UL texts
 LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -644,6 +686,16 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			POINT p;
 			p.x = GET_X_LPARAM(lParam);
 			p.y = GET_Y_LPARAM(lParam);
+
+			RECT windowRect;
+			GetWindowRect(hWnd, &windowRect);
+
+			int windowHeight = windowRect.bottom - windowRect.top;
+			if (p.y >= windowHeight * GRAPH_DRAG_PCT)
+			{
+				break;
+			}
+
 			ClientToScreen(hWnd, &p);
 
 #ifdef USE_ACTIVATION
@@ -655,7 +707,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				{
 					instance->ShowTopConsumersToolTip(p);
 				}
-				else if (instance->configManager->hoverSetting != HOVER_ENUM::SHOW_WHEN_AVAILABLE)
+				else if (instance->configManager->hoverSetting == HOVER_ENUM::SHOW_ALL)
 				{
 					instance->ShowUnavailableTooptip(p, L"Process monitoring requires elevation (Left-click to attempt)", true);
 				}
@@ -725,7 +777,6 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			}
 
 			DeleteObject(hpenWhite);
-
 
 			LOGFONT* modFont = (LOGFONT*)malloc(sizeof(LOGFONT));
 			if (modFont && instance->fontScaleInfo)
@@ -946,6 +997,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			ReleaseCapture();
 			instance->WriteWindowPos();
 			instance->ResetCursorDragOffset();
+			instance->adjustingScale = false;
 			break;
 
 		case WM_MOUSEMOVE:
@@ -960,42 +1012,74 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 				hasRootMouseEvent = TrackMouseEvent(&tme);
 			}
 
-			if (GetCapture() == hWnd)  //Check if this window has mouse input
+
+			HCURSOR baseCursor = LoadCursor(NULL, IDC_ARROW);
+			HCURSOR beamCursor = LoadCursor(NULL, IDC_SIZENS);
+			POINT mousePos;
+
+			//Get the current mouse coordinates
+			mousePos.x = GET_X_LPARAM(lParam);
+			mousePos.y = GET_Y_LPARAM(lParam);
+
+			RECT windowRect;
+			GetWindowRect(hWnd, &windowRect);
+
+			int windowHeight = windowRect.bottom - windowRect.top;
+			int windowWidth = windowRect.right - windowRect.left;
+
+			if (GetCapture() != hWnd)
 			{
-				RECT windowRect;
-				POINT mousePos;
-				GetWindowRect(hWnd, &windowRect);
-
-				//Get the current mouse coordinates
-				mousePos.x = GET_X_LPARAM(lParam);
-				mousePos.y = GET_Y_LPARAM(lParam);
-
-				int windowHeight = windowRect.bottom - windowRect.top;
-				int windowWidth = windowRect.right - windowRect.left;
-
-				//Make the cursor stay in the same place relative to the window
-
-				if (instance->xDragOffset == -1)
+				if (mousePos.y >= windowHeight * GRAPH_DRAG_PCT)
 				{
-					instance->xDragOffset = windowWidth - mousePos.x;
+					SetCursor(beamCursor);
 				}
-
-				if (instance->yDragOffset == -1)
+				else
 				{
-					instance->yDragOffset = windowHeight - mousePos.y;
+					SetCursor(baseCursor);
 				}
-
-				ClientToScreen(hWnd, &mousePos);
-
-				//Set the window's new screen position
-				// 
-				//We could use this line and keep the cursor's Y position the same as we drag the window, like with the X, but if we keep the top of the window at the cursor, then it provides
-				//A "free" way of preventing the window from being dragged above the top of the screen, as the cursor blocks it
-				// 
-				//MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y - (windowHeight - instance->yDragOffset), windowWidth, windowHeight, TRUE);
-
-				MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y, windowWidth, windowHeight, TRUE);
 			}
+			else  //Check if this window has mouse input
+			{
+				if (mousePos.y >= windowHeight * GRAPH_DRAG_PCT) //Allow user to drag down to reveal usage graphs
+				{
+					int currDPI = GetDpiForWindow(hWnd);
+					int min = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+					int max = MulDiv(ROOT_MAX_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+					if (mousePos.y < max && mousePos.y > min)
+					{
+						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, mousePos.y, SWP_NOZORDER | SWP_NOMOVE | SWP_FRAMECHANGED);
+					}
+				}
+				else 
+				{
+					//Make the cursor stay in the same place relative to the window
+
+					if (instance->xDragOffset == -1)
+					{
+						instance->xDragOffset = windowWidth - mousePos.x;
+					}
+
+					if (instance->yDragOffset == -1)
+					{
+						instance->yDragOffset = windowHeight - mousePos.y;
+					}
+
+					ClientToScreen(hWnd, &mousePos);
+
+					//Set the window's new screen position
+					// 
+					//We could use this line and keep the cursor's Y position the same as we drag the window, like with the X, but if we keep the top of the window at the cursor, then it provides
+					//A "free" way of preventing the window from being dragged above the top of the screen, as the cursor blocks it
+					// 
+					//MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y - (windowHeight - instance->yDragOffset), windowWidth, windowHeight, TRUE);
+
+					MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y, windowWidth, windowHeight, TRUE);
+				}
+			}
+
+			DeleteObject(baseCursor);
+			DeleteObject(beamCursor);
+
 			break;
 		}
 		case WM_COMMAND:
@@ -1022,9 +1106,145 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			HBRUSH brush = (HBRUSH)::GetStockObject(DC_BRUSH);
 			SetDCBrushColor(hdc, *instance->configManager->foregroundColour);
+			HPEN hPenUser = NULL;
+			int currDPI = GetDpiForWindow(hWnd);
 
 			FillRect(hdc, &ps.rcPaint, brush);
+
+			for (int i = 0; i < 2; i++)
+			{
+				int newXPos = 0;
+				int newYPos = 0;
+				double nrmUsage = 0.0;
+
+				int widthLimit = 0;
+
+				std::vector<Vector2>* prevPositions;
+
+				if (i == 0) //Download
+				{
+					hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->downloadTxtColour);
+					prevPositions = &instance->dlGraphPositions;
+				}
+				else //Upload
+				{
+					hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->uploadTxtColour);
+					prevPositions = &instance->ulGraphPositions;
+				}
+
+				if (hPenUser == NULL)
+				{
+					continue;
+				}
+				SelectObject(hdc, hPenUser);
+
+
+				for (int j = 0; j < prevPositions->size(); j++)
+				{
+					if (j < prevPositions->size() - 1) 
+					{
+						Vector2 pos = prevPositions->at(j);
+						Vector2 nxt = prevPositions->at(j + 1);
+						int pX = MulDiv(pos.x, currDPI, USER_DEFAULT_SCREEN_DPI);
+						int pY = MulDiv(pos.y, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+						int nX = MulDiv(nxt.x, currDPI, USER_DEFAULT_SCREEN_DPI);
+						int nY = MulDiv(nxt.y, currDPI, USER_DEFAULT_SCREEN_DPI);
+						MoveToEx(hdc, pX, pY, NULL);
+						LineTo(hdc, nX, nY);
+					}
+					
+				}
+			}
+
 			EndPaint(hWnd, &ps);
+			break;
+		}
+		case WM_DRAWGRAPH: 
+		{
+			int currDPI = GetDpiForWindow(hWnd);
+
+			//Get current net usage
+			int graphStep = MulDiv(GRAPH_STEP, currDPI, USER_DEFAULT_SCREEN_DPI);
+			double dl = (double)wParam;
+			double ul = (double)lParam;
+
+			double maxUsage = 1000.0;
+
+			double dlMbps = (dl / DIV_FACTOR);
+			double nrmDlUsage = dlMbps > maxUsage ? 1.0 : dlMbps / maxUsage;
+
+			double ulMbps = (ul / DIV_FACTOR);
+			double nrmUlUsage = ulMbps > maxUsage ? 1.0 : ulMbps / maxUsage;
+
+			//Left = dl, right = ul
+
+			RECT rc = { 0 };
+			RECT dlRc = { 0 };
+			RECT ulRc = { 0 };
+			GetWindowRect(hWnd, &rc);
+			GetWindowRect(instance->dlChildWindow, &dlRc); //Use these to base our X pos on
+			GetWindowRect(instance->ulChildWindow, &ulRc);
+
+			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&rc), 2);
+			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&dlRc), 2);
+			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&ulRc), 2);
+			int maxHeight = rc.bottom - (rc.bottom - dlRc.bottom);
+
+			//Store all points for 96DPI then just scale to the current DPI
+
+			for (int i = 0; i < 2; i++) 
+			{
+				int newXPos = 0;
+				int newYPos = 0;
+				double nrmUsage = 0.0;
+
+				int widthLimit = 0;
+
+				std::vector<Vector2> *prevPositions;
+
+				if (i == 0) //Download
+				{
+					newXPos = dlRc.left;
+					prevPositions = &instance->dlGraphPositions;
+					nrmUsage = nrmDlUsage;
+					widthLimit = dlRc.right;
+				}
+				else //Upload
+				{
+					newXPos = ulRc.left;
+					prevPositions = &instance->ulGraphPositions;
+					nrmUsage = nrmUlUsage;
+					widthLimit = ulRc.right;
+				}
+
+				newYPos = rc.bottom - ((rc.bottom - maxHeight) * nrmUsage);
+
+				for (int j = 0; j < prevPositions->size(); j++)
+				{
+					Vector2 pos = prevPositions->at(j);
+					int pX = MulDiv(pos.x, currDPI, USER_DEFAULT_SCREEN_DPI);
+					int pY = MulDiv(pos.y, currDPI, USER_DEFAULT_SCREEN_DPI);
+					newXPos += graphStep;
+				}
+
+				//Push graph along when > window width
+				if (newXPos > widthLimit)
+				{
+					prevPositions->erase(prevPositions->begin());
+					for (int j = 0; j < prevPositions->size(); j++)
+					{
+						prevPositions->at(j).x -= GRAPH_STEP;
+					}
+				}
+
+				int finalX = MulDiv(newXPos, USER_DEFAULT_SCREEN_DPI, currDPI);
+				int finalY = MulDiv(newYPos, USER_DEFAULT_SCREEN_DPI, currDPI);
+
+				prevPositions->push_back(Vector2(finalX, finalY));
+			}
+
+			instance->ForceRepaint();
 			break;
 		}
 		case WM_DPICHANGED:
@@ -1041,7 +1261,19 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			instance->InitForDPI(instance->ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
 			instance->UpdatePosIfRequired();
+			/*int currDPI = GetDpiForWindow(hWnd);
 
+			for (int i = 0; i < instance->dlGraphPositions.size(); i++) 
+			{
+				instance->dlGraphPositions[i].x = MulDiv(instance->dlGraphPositions[i].x, currDPI, USER_DEFAULT_SCREEN_DPI);
+				instance->dlGraphPositions[i].y = MulDiv(instance->dlGraphPositions[i].y, currDPI, USER_DEFAULT_SCREEN_DPI);
+			}
+
+			for (int i = 0; i < instance->ulGraphPositions.size(); i++)
+			{
+				instance->ulGraphPositions[i].x = MulDiv(instance->ulGraphPositions[i].x, currDPI, USER_DEFAULT_SCREEN_DPI);
+				instance->ulGraphPositions[i].y = MulDiv(instance->ulGraphPositions[i].y, currDPI, USER_DEFAULT_SCREEN_DPI);
+			}*/
 			break;
 		}
 		case WM_DISPLAYCHANGE:

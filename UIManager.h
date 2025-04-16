@@ -32,6 +32,7 @@
 #define WM_SETFORACTIVATION (WM_USER + 5)
 #define WM_UPDATECOLOUR (WM_USER + 6)
 #define WM_UPDATEFONT (WM_USER + 7)
+#define WM_DRAWGRAPH (WM_USER + 8)
 #define ONE_SECOND 1000000
 
 #define MOVE_TO 1
@@ -50,6 +51,8 @@
 
 #define ARROW_SIZE 15
 
+#define GRAPH_STEP 8
+
 #define VERSION_NUMBER L"Version 0.95"
 
 //Fonts use 72 point
@@ -62,6 +65,8 @@
 //Base values before any DPI scaling
 #define ROOT_INITIAL_WIDTH 220
 #define ROOT_INITIAL_HEIGHT 28
+#define ROOT_MAX_HEIGHT 50
+#define MIN_GRAPH_HEIGHT 5
 
 #define DL_INITIAL_X 10
 #define UL_INITIAL_X 110
@@ -76,6 +81,8 @@
 
 #define NO_PRIV_POPUP_INITIAL_WIDTH 425
 #define NO_PRIV_POPUP_INITIAL_HEIGHT 25
+
+#define GRAPH_DRAG_PCT 0.9 //> bottom part of window to drag 
 
 class BitmapScaleInfo
 {
@@ -105,6 +112,19 @@ public:
 		width = Width;
 		height = Height;
 	}
+};
+
+struct Vector2
+{
+public:
+	Vector2(int X, int Y) 
+	{
+		x = X;
+		y = Y;
+	}
+
+	int x;
+	int y;
 };
 
 class MonitorData
@@ -141,6 +161,9 @@ public:
 	~UIManager();
 private:
 
+	std::vector<Vector2> dlGraphPositions;
+	std::vector<Vector2> ulGraphPositions;
+
 	//For keeping the cursor in the same position when dragging the window
 	LONG xDragOffset = -1;
 	LONG yDragOffset = -1;
@@ -154,8 +177,11 @@ private:
 	void UpdateBitmapColours();
 	void GetMaxScreenRect();
 	COLORREF COLORREFToRGB(COLORREF Col);
+	void DrawGraph();
 
 	bool running = false;
+
+	bool adjustingScale = false;
 
 	std::mutex tickMutex;
 
@@ -201,6 +227,8 @@ private:
 	void ResetCursorDragOffset();
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
+	bool ShouldDrawGraph();
+	int GetDPIAwareGraphHeight();
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
