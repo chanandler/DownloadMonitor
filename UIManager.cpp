@@ -396,20 +396,14 @@ void UIManager::UpdateInfo()
 bool UIManager::ShouldDrawGraph()
 {
 	RECT parentRc = { 0 };
-	RECT childRc = { 0 };
 
 	GetWindowRect(instance->roothWnd, &parentRc);
-	GetWindowRect(instance->dlChildWindow, &childRc);
-	int minVal = GetDPIAwareGraphHeight();
+	MapWindowPoints(HWND_DESKTOP, instance->roothWnd, reinterpret_cast<POINT*>(&parentRc), 2);
 
-
-	return (parentRc.bottom - childRc.bottom >= minVal);
-}
-
-int UIManager::GetDPIAwareGraphHeight()
-{
 	int currDPI = GetDpiForWindow(instance->roothWnd);
-	return MulDiv(MIN_GRAPH_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+	int targetHeight = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+	return (parentRc.bottom >= targetHeight);
 }
 
 WCHAR* UIManager::GetStringFromBits(double inBits)
@@ -978,19 +972,47 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			break;
 		}
 		case WM_LBUTTONDOWN:
+		{
 			//Restrict mouse input to current window
 			SetCapture(hWnd);
 			break;
+		}
 
 		case WM_LBUTTONUP:
+		{
 			//Window no longer requires all mouse input
 			ReleaseCapture();
 			instance->WriteWindowPos();
 			instance->ResetCursorDragOffset();
 			instance->adjustingScale = false;
+			instance->adjustingPos = false;
 
-			if (!instance->ShouldDrawGraph())
+			int currDPI = GetDpiForWindow(hWnd);
+			int snapTarget = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+			RECT windowRect;
+			GetWindowRect(hWnd, &windowRect);
+			int windowWidth = windowRect.right - windowRect.left;
+
+			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&windowRect), 2);
+
+			POINT mousePos;
+
+			//Get the current mouse coordinates
+			mousePos.x = GET_X_LPARAM(lParam);
+			mousePos.y = GET_Y_LPARAM(lParam);
+
+			//Snap to graph open/closed
+			if (windowRect.bottom >= snapTarget)
 			{
+				int maxHeight = MulDiv(ROOT_MAX_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+				SetWindowPos(hWnd, NULL, 0, 0, windowWidth, maxHeight, SWP_NOZORDER | SWP_NOMOVE);
+			}
+			else
+			{
+				int newWindowHeight = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+				SetWindowPos(hWnd, NULL, 0, 0, windowWidth, newWindowHeight, SWP_NOZORDER | SWP_NOMOVE);
+
 				if (instance->dlGraphPositions.size() > 0)
 				{
 					instance->dlGraphPositions.clear();
@@ -999,11 +1021,18 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 				{
 					instance->ulGraphPositions.clear();
 				}
-
-				instance->ForceRepaint();
 			}
 			break;
+		}
+		case WM_ERASEBKGND: 
+		{
+			if (instance->adjustingScale) 
+			{
+				return TRUE;
+			}
 
+			break;
+		}
 		case WM_MOUSEMOVE:
 		{
 			if (hasRootMouseEvent == FALSE)
@@ -1015,7 +1044,6 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 				tme.dwHoverTime = HOVER_DEFAULT;
 				hasRootMouseEvent = TrackMouseEvent(&tme);
 			}
-
 
 			HCURSOR baseCursor = LoadCursor(NULL, IDC_ARROW);
 			HCURSOR beamCursor = LoadCursor(NULL, IDC_SIZENS);
@@ -1033,7 +1061,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			if (GetCapture() != hWnd)
 			{
-				if (mousePos.y >= windowHeight * GRAPH_DRAG_PCT)
+				if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT))
 				{
 					SetCursor(beamCursor);
 				}
@@ -1044,14 +1072,24 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			}
 			else  //Check if this window has mouse input
 			{
-				if (mousePos.y >= windowHeight * GRAPH_DRAG_PCT) //Allow user to drag down to reveal usage graphs
+				if (!instance->adjustingPos && mousePos.y >= windowHeight * GRAPH_DRAG_PCT) //Allow user to drag down to reveal usage graphs
 				{
 					int currDPI = GetDpiForWindow(hWnd);
 					int min = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 					int max = MulDiv(ROOT_MAX_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+					
 					if (mousePos.y < max && mousePos.y > min)
 					{
-						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, mousePos.y, SWP_NOZORDER | SWP_NOMOVE | SWP_FRAMECHANGED);
+						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, mousePos.y, SWP_NOZORDER | SWP_NOMOVE | SWP_NOREDRAW);
+
+						RECT rdrawRc = { 0 };
+
+						rdrawRc.left = 0;
+						rdrawRc.right = windowWidth;
+						rdrawRc.top = windowHeight;
+						rdrawRc.bottom = mousePos.y;
+
+						InvalidateRect(hWnd, &rdrawRc, FALSE); //Only redraw the section that has changed to avoid flicker
 					}
 					else if(mousePos.y > max)
 					{
@@ -1085,6 +1123,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					//MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y - (windowHeight - instance->yDragOffset), windowWidth, windowHeight, TRUE);
 
 					MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y, windowWidth, windowHeight, TRUE);
+					instance->adjustingPos = true;
 				}
 			}
 
@@ -1215,7 +1254,6 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		case WM_DRAWGRAPH:
 		{
 			//TODO save if graph is open
-			//Fix glitchy resizing
 
 			//Get current net usage
 			double dl = (double)wParam;
@@ -1226,7 +1264,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			//Left = dl, right = ul
 
-			//Store normalised values so we can re-interpret them as window is resized
+			//Store mbps val so we can interpret as needed based on window size and max speeds
 			instance->dlGraphPositions.push_back(NetGraphValue(dlMbps));
 			instance->ulGraphPositions.push_back(NetGraphValue(ulMbps));
 
@@ -1251,12 +1289,15 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			break;
 		}
 		case WM_DISPLAYCHANGE:
+		{
 			instance->UpdatePosIfRequired();
 			break;
+		}
 		case WM_DESTROY:
+		{
 			PostQuitMessage(0);
 			break;
-
+		}
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }

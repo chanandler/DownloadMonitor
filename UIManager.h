@@ -51,8 +51,11 @@
 
 #define ARROW_SIZE 15
 
-#define GRAPH_STEP 10
+#define GRAPH_STEP 5
 #define MIN_MAX_USAGE 4.0 //2 mbps is the lowest max we will show
+#define GRAPH_DRAG_PCT 0.8 //> bottom part of window to drag 
+#define GRAPH_SNAP_HEIGHT 30 //Height of window we will then snap to full
+#define ROOT_MAX_HEIGHT 50
 
 #define VERSION_NUMBER L"Version 0.97"
 
@@ -66,8 +69,6 @@
 //Base values before any DPI scaling
 #define ROOT_INITIAL_WIDTH 220
 #define ROOT_INITIAL_HEIGHT 28
-#define ROOT_MAX_HEIGHT 50
-#define MIN_GRAPH_HEIGHT 15
 
 #define DL_INITIAL_X 10
 #define UL_INITIAL_X 110
@@ -83,7 +84,7 @@
 #define NO_PRIV_POPUP_INITIAL_WIDTH 425
 #define NO_PRIV_POPUP_INITIAL_HEIGHT 25
 
-#define GRAPH_DRAG_PCT 0.8 //> bottom part of window to drag 
+
 
 class BitmapScaleInfo
 {
@@ -181,6 +182,7 @@ private:
 	bool running = false;
 
 	bool adjustingScale = false;
+	bool adjustingPos = false;
 
 	std::mutex tickMutex;
 
