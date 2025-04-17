@@ -53,7 +53,7 @@
 
 #define GRAPH_STEP 5
 #define MIN_MAX_USAGE 4.0 //2 mbps is the lowest max we will show
-#define GRAPH_DRAG_PCT 0.8 //> bottom part of window to drag 
+#define GRAPH_DRAG_PCT 0.7 //> bottom part of window to drag 
 #define GRAPH_SNAP_HEIGHT 30 //Height of window we will then snap to full
 #define ROOT_MAX_HEIGHT 50
 
@@ -173,6 +173,9 @@ private:
 	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 	WCHAR szChildStaticWindowClass[MAX_LOADSTRING];
 	WCHAR szPopupWindowClass[MAX_LOADSTRING];
+
+	HCURSOR baseCursor;
+	HCURSOR beamCursor;
 
 	void UpdateBitmapColours();
 	void GetMaxScreenRect();

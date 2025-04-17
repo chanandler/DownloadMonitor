@@ -115,6 +115,11 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	monitorFinder = new MonitorData();
 	monitorFinder->BuildMonitorList();
 
+	baseCursor = LoadCursor(NULL, IDC_ARROW);
+	beamCursor = LoadCursor(NULL, IDC_SIZENS);
+
+	SetCursor(baseCursor);
+
 	dlChildWindow = CreateWindow(szChildStaticWindowClass, L"DL_SPEED", WS_VISIBLE | WS_CHILDWINDOW, DL_INITIAL_X,
 		CHILD_INITIAL_Y, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, roothWnd, NULL, hInstance, NULL);
 	ulChildWindow = CreateWindow(szChildStaticWindowClass, L"UL_SPEED", WS_VISIBLE | WS_CHILDWINDOW, UL_INITIAL_X,
@@ -251,6 +256,8 @@ UIManager::~UIManager()
 		delete fontScaleInfo;
 	}
 
+	DeleteObject(baseCursor);
+	DeleteObject(beamCursor);
 	delete netManager;
 	delete configManager;
 	delete activationManager;
@@ -650,6 +657,31 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 				tme.dwHoverTime = HOVER_DEFAULT;
 				hasChildMouseEvent = TrackMouseEvent(&tme);
 			}
+
+			POINT mousePos;
+
+			//Get the current mouse coordinates
+			mousePos.x = GET_X_LPARAM(lParam);
+			mousePos.y = GET_Y_LPARAM(lParam);
+
+			RECT windowRect;
+			GetWindowRect(hWnd, &windowRect);
+
+			int windowHeight = windowRect.bottom - windowRect.top;
+			int windowWidth = windowRect.right - windowRect.left;
+
+			if (GetCapture() != hWnd)
+			{
+				if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT))
+				{
+					SetCursor(instance->beamCursor);
+				}
+				else
+				{
+					SetCursor(instance->baseCursor);
+				}
+			}
+
 			break;
 		}
 		case WM_MOUSEHOVER:
@@ -675,7 +707,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			GetWindowRect(hWnd, &windowRect);
 
 			int windowHeight = windowRect.bottom - windowRect.top;
-			if (p.y >= windowHeight * GRAPH_DRAG_PCT)
+			if (!instance->adjustingPos && p.y >= windowHeight * GRAPH_DRAG_PCT)
 			{
 				break;
 			}
@@ -986,7 +1018,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			instance->ResetCursorDragOffset();
 			instance->adjustingScale = false;
 			instance->adjustingPos = false;
-
+			SetCursor(instance->baseCursor);
 			int currDPI = GetDpiForWindow(hWnd);
 			int snapTarget = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 
@@ -1045,8 +1077,6 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 				hasRootMouseEvent = TrackMouseEvent(&tme);
 			}
 
-			HCURSOR baseCursor = LoadCursor(NULL, IDC_ARROW);
-			HCURSOR beamCursor = LoadCursor(NULL, IDC_SIZENS);
 			POINT mousePos;
 
 			//Get the current mouse coordinates
@@ -1061,18 +1091,18 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			if (GetCapture() != hWnd)
 			{
-				if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT))
+				if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT) && mousePos.y <= windowHeight)
 				{
-					SetCursor(beamCursor);
+					SetCursor(instance->beamCursor);
 				}
 				else
 				{
-					SetCursor(baseCursor);
+					SetCursor(instance->baseCursor);
 				}
 			}
 			else  //Check if this window has mouse input
 			{
-				if (!instance->adjustingPos && mousePos.y >= windowHeight * GRAPH_DRAG_PCT) //Allow user to drag down to reveal usage graphs
+				if (instance->adjustingScale || mousePos.y >= (windowHeight * GRAPH_DRAG_PCT) && mousePos.y <= windowHeight) //Allow user to drag down to reveal usage graphs
 				{
 					int currDPI = GetDpiForWindow(hWnd);
 					int min = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
@@ -1094,12 +1124,12 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					else if(mousePos.y > max)
 					{
 						ClientToScreen(hWnd, &mousePos);
-						SetCursorPos(mousePos.x, windowRect.bottom);
+						//SetCursorPos(mousePos.x, windowRect.bottom);
 					}
 					
 					instance->adjustingScale = true;
 				}
-				else if(!instance->adjustingScale)
+				else
 				{
 					//Make the cursor stay in the same place relative to the window
 
@@ -1126,9 +1156,6 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					instance->adjustingPos = true;
 				}
 			}
-
-			DeleteObject(baseCursor);
-			DeleteObject(beamCursor);
 
 			break;
 		}
