@@ -51,9 +51,10 @@
 
 #define ARROW_SIZE 15
 
-#define GRAPH_STEP 2
+#define GRAPH_STEP 10
+#define MIN_MAX_USAGE 4.0 //2 mbps is the lowest max we will show
 
-#define VERSION_NUMBER L"Version 0.95"
+#define VERSION_NUMBER L"Version 0.97"
 
 //Fonts use 72 point
 //Ideally we would want to have font sizes < 8/-15
@@ -66,7 +67,7 @@
 #define ROOT_INITIAL_WIDTH 220
 #define ROOT_INITIAL_HEIGHT 28
 #define ROOT_MAX_HEIGHT 50
-#define MIN_GRAPH_HEIGHT 5
+#define MIN_GRAPH_HEIGHT 15
 
 #define DL_INITIAL_X 10
 #define UL_INITIAL_X 110
@@ -82,7 +83,7 @@
 #define NO_PRIV_POPUP_INITIAL_WIDTH 425
 #define NO_PRIV_POPUP_INITIAL_HEIGHT 25
 
-#define GRAPH_DRAG_PCT 0.9 //> bottom part of window to drag 
+#define GRAPH_DRAG_PCT 0.8 //> bottom part of window to drag 
 
 class BitmapScaleInfo
 {
@@ -114,17 +115,15 @@ public:
 	}
 };
 
-struct Vector2
+struct NetGraphValue
 {
 public:
-	Vector2(int X, int Y) 
+	NetGraphValue(float MbpsVal)
 	{
-		x = X;
-		y = Y;
+		mbpsVal = MbpsVal;
 	}
 
-	int x;
-	int y;
+	float mbpsVal;
 };
 
 class MonitorData
@@ -161,8 +160,8 @@ public:
 	~UIManager();
 private:
 
-	std::vector<Vector2> dlGraphPositions;
-	std::vector<Vector2> ulGraphPositions;
+	std::vector<NetGraphValue> dlGraphPositions;
+	std::vector<NetGraphValue> ulGraphPositions;
 
 	//For keeping the cursor in the same position when dragging the window
 	LONG xDragOffset = -1;

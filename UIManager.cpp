@@ -386,17 +386,7 @@ void UIManager::UpdateInfo()
 		{
 			SendMessage(instance->roothWnd, WM_DRAWGRAPH, (LPARAM)dl, (WPARAM)ul);
 		}
-		else
-		{
-			if (instance->dlGraphPositions.size() > 0) 
-			{
-				instance->dlGraphPositions.clear();
-			}
-			if (instance->ulGraphPositions.size() > 0)
-			{
-				instance->ulGraphPositions.clear();
-			}
-		}
+
 		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
 	}
 
@@ -416,7 +406,7 @@ bool UIManager::ShouldDrawGraph()
 	return (parentRc.bottom - childRc.bottom >= minVal);
 }
 
-int UIManager::GetDPIAwareGraphHeight() 
+int UIManager::GetDPIAwareGraphHeight()
 {
 	int currDPI = GetDpiForWindow(instance->roothWnd);
 	return MulDiv(MIN_GRAPH_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
@@ -998,6 +988,20 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			instance->WriteWindowPos();
 			instance->ResetCursorDragOffset();
 			instance->adjustingScale = false;
+
+			if (!instance->ShouldDrawGraph())
+			{
+				if (instance->dlGraphPositions.size() > 0)
+				{
+					instance->dlGraphPositions.clear();
+				}
+				if (instance->ulGraphPositions.size() > 0)
+				{
+					instance->ulGraphPositions.clear();
+				}
+
+				instance->ForceRepaint();
+			}
 			break;
 
 		case WM_MOUSEMOVE:
@@ -1049,8 +1053,15 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					{
 						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, mousePos.y, SWP_NOZORDER | SWP_NOMOVE | SWP_FRAMECHANGED);
 					}
+					else if(mousePos.y > max)
+					{
+						ClientToScreen(hWnd, &mousePos);
+						SetCursorPos(mousePos.x, windowRect.bottom);
+					}
+					
+					instance->adjustingScale = true;
 				}
-				else 
+				else if(!instance->adjustingScale)
 				{
 					//Make the cursor stay in the same place relative to the window
 
@@ -1109,6 +1120,16 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			HPEN hPenUser = NULL;
 			int currDPI = GetDpiForWindow(hWnd);
 
+			int graphStep = MulDiv(GRAPH_STEP, currDPI, USER_DEFAULT_SCREEN_DPI);
+			RECT dlRc = { 0 };
+			RECT ulRc = { 0 };
+			GetWindowRect(instance->dlChildWindow, &dlRc); //Use these to base our X pos on
+			GetWindowRect(instance->ulChildWindow, &ulRc);
+
+			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&dlRc), 2);
+			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&ulRc), 2);
+			int maxHeight = (ps.rcPaint.bottom) - ((ps.rcPaint.bottom - dlRc.bottom)) * 0.9;
+
 			FillRect(hdc, &ps.rcPaint, brush);
 
 			for (int i = 0; i < 2; i++)
@@ -1118,18 +1139,24 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 				double nrmUsage = 0.0;
 
 				int widthLimit = 0;
+				int startPos = 0;
 
-				std::vector<Vector2>* prevPositions;
+				//Draw graph
+				std::vector<NetGraphValue>* prevPositions;
 
 				if (i == 0) //Download
 				{
 					hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->downloadTxtColour);
 					prevPositions = &instance->dlGraphPositions;
+					startPos = dlRc.left;
+					widthLimit = dlRc.right;
 				}
 				else //Upload
 				{
 					hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->uploadTxtColour);
 					prevPositions = &instance->ulGraphPositions;
+					startPos = dlRc.right;
+					widthLimit = ulRc.right;
 				}
 
 				if (hPenUser == NULL)
@@ -1138,22 +1165,45 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 				}
 				SelectObject(hdc, hPenUser);
 
+				float maxVal = 0.0;
+				for (int j = 0; j < prevPositions->size(); j++)
+				{
+					if (prevPositions->at(j).mbpsVal > maxVal)
+					{
+						maxVal = prevPositions->at(j).mbpsVal;
+					}
+				}
+
+				if (maxVal < MIN_MAX_USAGE)
+				{
+					maxVal = MIN_MAX_USAGE;
+				}
 
 				for (int j = 0; j < prevPositions->size(); j++)
 				{
-					if (j < prevPositions->size() - 1) 
+					if (j < prevPositions->size() - 1)
 					{
-						Vector2 pos = prevPositions->at(j);
-						Vector2 nxt = prevPositions->at(j + 1);
-						int pX = MulDiv(pos.x, currDPI, USER_DEFAULT_SCREEN_DPI);
-						int pY = MulDiv(pos.y, currDPI, USER_DEFAULT_SCREEN_DPI);
+						NetGraphValue curr = prevPositions->at(j);
+						NetGraphValue nxt = prevPositions->at(j + 1);
 
-						int nX = MulDiv(nxt.x, currDPI, USER_DEFAULT_SCREEN_DPI);
-						int nY = MulDiv(nxt.y, currDPI, USER_DEFAULT_SCREEN_DPI);
-						MoveToEx(hdc, pX, pY, NULL);
+						float pNrmVal = curr.mbpsVal / maxVal;
+						int cX = startPos;
+						int cY = (ps.rcPaint.bottom * 0.9) - (((ps.rcPaint.bottom * 0.9) - maxHeight) * pNrmVal);
+
+						float nNrmVal = nxt.mbpsVal / maxVal;
+						int nX = startPos + graphStep;
+						int nY = (ps.rcPaint.bottom * 0.9) - (((ps.rcPaint.bottom * 0.9) - maxHeight) * nNrmVal);
+						MoveToEx(hdc, cX, cY, NULL);
 						LineTo(hdc, nX, nY);
+
+						startPos += graphStep;
 					}
-					
+				}
+
+				//Push graph along when > window width
+				if (prevPositions->size() > 0 && startPos > widthLimit - 1)
+				{
+					prevPositions->erase(prevPositions->begin());
 				}
 
 				DeleteObject(hPenUser);
@@ -1162,90 +1212,23 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			EndPaint(hWnd, &ps);
 			break;
 		}
-		case WM_DRAWGRAPH: 
+		case WM_DRAWGRAPH:
 		{
 			//TODO save if graph is open
-			int currDPI = GetDpiForWindow(hWnd);
+			//Fix glitchy resizing
 
 			//Get current net usage
-			int graphStep = MulDiv(GRAPH_STEP, currDPI, USER_DEFAULT_SCREEN_DPI);
 			double dl = (double)wParam;
 			double ul = (double)lParam;
 
-			double maxUsage = 1000.0;
-
 			double dlMbps = (dl / DIV_FACTOR);
-			double nrmDlUsage = dlMbps > maxUsage ? 1.0 : dlMbps / maxUsage;
-
 			double ulMbps = (ul / DIV_FACTOR);
-			double nrmUlUsage = ulMbps > maxUsage ? 1.0 : ulMbps / maxUsage;
 
 			//Left = dl, right = ul
 
-			RECT rc = { 0 };
-			RECT dlRc = { 0 };
-			RECT ulRc = { 0 };
-			GetWindowRect(hWnd, &rc);
-			GetWindowRect(instance->dlChildWindow, &dlRc); //Use these to base our X pos on
-			GetWindowRect(instance->ulChildWindow, &ulRc);
-
-			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&rc), 2);
-			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&dlRc), 2);
-			MapWindowPoints(HWND_DESKTOP, hWnd, reinterpret_cast<POINT*>(&ulRc), 2);
-			int maxHeight = rc.bottom - (rc.bottom - dlRc.bottom);
-
-			//Store all points for 96DPI then just scale to the current DPI
-
-			for (int i = 0; i < 2; i++) 
-			{
-				int newXPos = 0;
-				int newYPos = 0;
-				double nrmUsage = 0.0;
-
-				int widthLimit = 0;
-
-				std::vector<Vector2> *prevPositions;
-
-				if (i == 0) //Download
-				{
-					newXPos = dlRc.left;
-					prevPositions = &instance->dlGraphPositions;
-					nrmUsage = nrmDlUsage;
-					widthLimit = dlRc.right;
-				}
-				else //Upload
-				{
-					newXPos = ulRc.left;
-					prevPositions = &instance->ulGraphPositions;
-					nrmUsage = nrmUlUsage;
-					widthLimit = ulRc.right;
-				}
-
-				newYPos = (rc.bottom * 0.9) - (((rc.bottom * 0.9) - maxHeight) * nrmUsage);
-
-				for (int j = 0; j < prevPositions->size(); j++)
-				{
-					Vector2 pos = prevPositions->at(j);
-					int pX = MulDiv(pos.x, currDPI, USER_DEFAULT_SCREEN_DPI);
-					int pY = MulDiv(pos.y, currDPI, USER_DEFAULT_SCREEN_DPI);
-					newXPos += graphStep;
-				}
-
-				//Push graph along when > window width
-				if (newXPos > widthLimit)
-				{
-					prevPositions->erase(prevPositions->begin());
-					for (int j = 0; j < prevPositions->size(); j++)
-					{
-						prevPositions->at(j).x -= GRAPH_STEP;
-					}
-				}
-
-				int finalX = MulDiv(newXPos, USER_DEFAULT_SCREEN_DPI, currDPI);
-				int finalY = MulDiv(newYPos, USER_DEFAULT_SCREEN_DPI, currDPI);
-
-				prevPositions->push_back(Vector2(finalX, finalY));
-			}
+			//Store normalised values so we can re-interpret them as window is resized
+			instance->dlGraphPositions.push_back(NetGraphValue(dlMbps));
+			instance->ulGraphPositions.push_back(NetGraphValue(ulMbps));
 
 			instance->ForceRepaint();
 			break;
@@ -1264,19 +1247,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			instance->InitForDPI(instance->ulChildWindow, CHILD_INITIAL_WIDTH, CHILD_INITIAL_HEIGHT, UL_INITIAL_X, CHILD_INITIAL_Y);
 
 			instance->UpdatePosIfRequired();
-			/*int currDPI = GetDpiForWindow(hWnd);
 
-			for (int i = 0; i < instance->dlGraphPositions.size(); i++) 
-			{
-				instance->dlGraphPositions[i].x = MulDiv(instance->dlGraphPositions[i].x, currDPI, USER_DEFAULT_SCREEN_DPI);
-				instance->dlGraphPositions[i].y = MulDiv(instance->dlGraphPositions[i].y, currDPI, USER_DEFAULT_SCREEN_DPI);
-			}
-
-			for (int i = 0; i < instance->ulGraphPositions.size(); i++)
-			{
-				instance->ulGraphPositions[i].x = MulDiv(instance->ulGraphPositions[i].x, currDPI, USER_DEFAULT_SCREEN_DPI);
-				instance->ulGraphPositions[i].y = MulDiv(instance->ulGraphPositions[i].y, currDPI, USER_DEFAULT_SCREEN_DPI);
-			}*/
 			break;
 		}
 		case WM_DISPLAYCHANGE:
