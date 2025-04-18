@@ -669,18 +669,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 
 			int windowHeight = windowRect.bottom - windowRect.top;
 			int windowWidth = windowRect.right - windowRect.left;
-
-			if (GetCapture() != hWnd)
-			{
-				if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT))
-				{
-					SetCursor(instance->beamCursor);
-				}
-				else
-				{
-					SetCursor(instance->baseCursor);
-				}
-			}
+			SetCursor(instance->baseCursor);
 
 			break;
 		}
