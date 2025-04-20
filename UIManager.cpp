@@ -1091,7 +1091,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			}
 			else  //Check if this window has mouse input
 			{
-				if (instance->adjustingScale || mousePos.y >= (windowHeight * GRAPH_DRAG_PCT) && mousePos.y <= windowHeight) //Allow user to drag down to reveal usage graphs
+				if (instance->adjustingScale || mousePos.y >= (windowHeight * GRAPH_DRAG_PCT)) //Allow user to drag down to reveal usage graphs
 				{
 					int currDPI = GetDpiForWindow(hWnd);
 					int min = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
