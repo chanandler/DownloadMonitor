@@ -22,6 +22,8 @@
 #define CFG_SHOW_WHEN_AVAILABLE "SHOW_WHEN_AVAILABLE"
 #define CFG_DO_NOTHING "DO_NOTHING"
 
+#define DRAG_TO_EXPOSE_GRAPH "DRAG_TO_EXPOSE_GRAPH"
+
 enum FONT_ENUM
 {
 	HEIGHT = 0,
@@ -103,6 +105,8 @@ public:
 
 	void UpdateHoverSetting(HOVER_ENUM newSetting);
 
+	void UpdateDragToExposeGraph(bool newGraphSetting);
+
 	void UpdateBorderEnabled(bool newBorder);
 
 	void UpdateBorderWH(int newWH);
@@ -122,6 +126,8 @@ public:
 	LOGFONT* currentFont;
 
 	HOVER_ENUM hoverSetting;
+
+	bool dragToExposeGraph;
 
 	class ThemeManager* themeManagerRef;
 };

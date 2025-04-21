@@ -109,6 +109,12 @@ void ConfigManager::UpdateHoverSetting(HOVER_ENUM newSetting)
 	WriteData();
 }
 
+void ConfigManager::UpdateDragToExposeGraph(bool newGraphSetting)
+{
+	dragToExposeGraph = newGraphSetting;
+	WriteData();
+}
+
 void ConfigManager::UpdateBorderEnabled(bool newBorder)
 {
 	drawBorder = newBorder;
@@ -211,13 +217,16 @@ void ConfigManager::WriteData()
 	char border_w_h_buf[200];
 	sprintf_s(border_w_h_buf, "%s=%i", BORDER_W_H, borderWH);
 
+	char drag_graph_buf[200];
+	sprintf_s(drag_graph_buf, "%s=%s", DRAG_TO_EXPOSE_GRAPH, dragToExposeGraph ? "TRUE" : "FALSE");
+
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 	std::ofstream configFile(pathBuf);
 
 	// Write to the file
 	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n"
-		<< adapter_buf << "\n" << hover_buf << "\n" << draw_border_buf << "\n" << border_w_h_buf << "\n";
+		<< adapter_buf << "\n" << hover_buf << "\n" << draw_border_buf << "\n" << border_w_h_buf << "\n" << drag_graph_buf << "\n";
 
 	configFile.close();
 }
@@ -414,6 +423,20 @@ bool ConfigManager::ReadData()
 
 			borderWH = val;
 
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), DRAG_TO_EXPOSE_GRAPH, 20))
+		{
+			char* allowGraph = ProcessChar(dataStart);
+			if (!allowGraph)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			dragToExposeGraph = !strcmp(allowGraph, "TRUE");
+
+			free(allowGraph);
 			++readCount;
 		}
 	}
@@ -736,11 +759,12 @@ void ConfigManager::InitDefaults()
 	lastX = 1200;
 	strcpy_s(uniqueAddr, 32, "AUTO");
 	hoverSetting = HOVER_ENUM::SHOW_ALL;
+	dragToExposeGraph = true;
 
 	if (themeManagerRef)
 	{
 		Theme* newTheme = themeManagerRef->GetTheme(AVAILABLE_THEME::SLATE_GREY);
-		if (!newTheme) 
+		if (!newTheme)
 		{
 			return;
 		}

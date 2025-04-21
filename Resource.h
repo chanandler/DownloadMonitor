@@ -59,6 +59,8 @@
 #define IDC_RESET_CONFIG                1009
 #define IDC_ACTIVATE                    1010
 #define IDC_ACTIVATE2                   1011
+#define IDC_ADAPTER_AUTO_CHECK2         1011
+#define IDC_ALLOW_GRAPH_CHECK           1011
 #define IDC_LICENSE_KEY                 1018
 #define IDC_LICENSE_KEY1                1018
 #define IDC_IPADDRESS1                  1019

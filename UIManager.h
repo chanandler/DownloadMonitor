@@ -54,7 +54,8 @@
 #define GRAPH_STEP 5
 #define MIN_MAX_USAGE 4.0 //2 mbps is the lowest max we will show
 #define GRAPH_DRAG_PCT 0.7 //> bottom part of window to drag 
-#define GRAPH_SNAP_HEIGHT 40 //Height of window we will then snap to full
+#define GRAPH_SNAP_HEIGHT 42 //Height of window we will then snap to full
+#define GRAPH_MIN_SNAP_HEIGHT 35 //Height of window we will then snap to minimised
 #define ROOT_MAX_HEIGHT 50
 
 #define VERSION_NUMBER L"Version 0.97"

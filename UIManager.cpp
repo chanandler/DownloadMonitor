@@ -410,7 +410,7 @@ bool UIManager::ShouldDrawGraph()
 	int currDPI = GetDpiForWindow(instance->roothWnd);
 	int targetHeight = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 
-	return (parentRc.bottom >= targetHeight);
+	return configManager->dragToExposeGraph && (parentRc.bottom >= targetHeight);
 }
 
 WCHAR* UIManager::GetStringFromBits(double inBits)
@@ -996,6 +996,24 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		{
 			//Restrict mouse input to current window
 			SetCapture(hWnd);
+
+			POINT mousePos;
+
+			//Get the current mouse coordinates
+			mousePos.x = GET_X_LPARAM(lParam);
+			mousePos.y = GET_Y_LPARAM(lParam);
+
+			RECT windowRect;
+			GetWindowRect(hWnd, &windowRect);
+
+			int windowHeight = windowRect.bottom - windowRect.top;
+			int windowWidth = windowRect.right - windowRect.left;
+
+
+			if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT) && mousePos.y <= windowHeight)
+			{
+				SetCursor(instance->beamCursor);
+			}
 			break;
 		}
 
@@ -1009,7 +1027,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			instance->adjustingPos = false;
 			SetCursor(instance->baseCursor);
 			int currDPI = GetDpiForWindow(hWnd);
-			int snapTarget = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+			int snapOpenTarget = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+			int snapClosedTarget = MulDiv(GRAPH_MIN_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 
 			RECT windowRect;
 			GetWindowRect(hWnd, &windowRect);
@@ -1024,7 +1043,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			mousePos.y = GET_Y_LPARAM(lParam);
 
 			//Snap to graph open/closed
-			if (windowRect.bottom >= snapTarget)
+			if (windowRect.bottom >= snapOpenTarget)
 			{
 				int maxHeight = MulDiv(ROOT_MAX_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 				SetWindowPos(hWnd, NULL, 0, 0, windowWidth, maxHeight, SWP_NOZORDER | SWP_NOMOVE);
@@ -1045,9 +1064,9 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			}
 			break;
 		}
-		case WM_ERASEBKGND: 
+		case WM_ERASEBKGND:
 		{
-			if (instance->adjustingScale) 
+			if (instance->adjustingScale)
 			{
 				return TRUE;
 			}
@@ -1080,42 +1099,54 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			if (GetCapture() != hWnd)
 			{
-				if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT) && mousePos.y <= windowHeight)
+				if (configManager->dragToExposeGraph)
 				{
-					SetCursor(instance->beamCursor);
-				}
-				else
-				{
-					SetCursor(instance->baseCursor);
+					if (mousePos.y >= (windowHeight * GRAPH_DRAG_PCT) && mousePos.y <= windowHeight)
+					{
+						SetCursor(instance->beamCursor);
+					}
+					else
+					{
+						SetCursor(instance->baseCursor);
+					}
 				}
 			}
 			else  //Check if this window has mouse input
 			{
-				if (instance->adjustingScale || mousePos.y >= (windowHeight * GRAPH_DRAG_PCT)) //Allow user to drag down to reveal usage graphs
+				if (configManager->dragToExposeGraph && (instance->adjustingScale || mousePos.y >= (windowHeight * GRAPH_DRAG_PCT))) //Allow user to drag down to reveal usage graphs
 				{
 					int currDPI = GetDpiForWindow(hWnd);
 					int min = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
 					int max = MulDiv(ROOT_MAX_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
-					
-					if (mousePos.y < max && mousePos.y > min)
+
+					RECT rdrawRc = { 0 };
+
+					rdrawRc.left = 0;
+					rdrawRc.right = windowWidth;
+					rdrawRc.top = windowHeight;
+
+					int snapOpenTarget = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+					int snapClosedTarget = MulDiv(GRAPH_MIN_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+
+					//Snap to open/closed as window is scaled
+					if (mousePos.y >= snapOpenTarget)
+					{
+						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, max, SWP_NOZORDER | SWP_NOREDRAW | SWP_NOMOVE);
+						rdrawRc.bottom = max;
+					}
+					else if (mousePos.y <= snapClosedTarget)
+					{
+						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, min, SWP_NOZORDER | SWP_NOREDRAW | SWP_NOMOVE);
+						rdrawRc.bottom = min;
+					}
+					else if (mousePos.y <= max && mousePos.y >= min)
 					{
 						SetWindowPos(hWnd, NULL, 0, 0, windowWidth, mousePos.y, SWP_NOZORDER | SWP_NOMOVE | SWP_NOREDRAW);
-
-						RECT rdrawRc = { 0 };
-
-						rdrawRc.left = 0;
-						rdrawRc.right = windowWidth;
-						rdrawRc.top = windowHeight;
 						rdrawRc.bottom = mousePos.y;
+					}
 
-						InvalidateRect(hWnd, &rdrawRc, FALSE); //Only redraw the section that has changed to avoid flicker
-					}
-					else if(mousePos.y > max)
-					{
-						ClientToScreen(hWnd, &mousePos);
-						//SetCursorPos(mousePos.x, windowRect.bottom);
-					}
-					
+					InvalidateRect(hWnd, &rdrawRc, FALSE); //Only redraw the section that has changed to avoid flicker
+
 					instance->adjustingScale = true;
 				}
 				else
@@ -1187,83 +1218,86 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 
 			FillRect(hdc, &ps.rcPaint, brush);
 
-			for (int i = 0; i < 2; i++)
+			if (configManager->dragToExposeGraph && !instance->adjustingScale)
 			{
-				int newXPos = 0;
-				int newYPos = 0;
-				double nrmUsage = 0.0;
-
-				int widthLimit = 0;
-				int startPos = 0;
-
-				//Draw graph
-				std::vector<NetGraphValue>* prevPositions;
-
-				if (i == 0) //Download
+				for (int i = 0; i < 2; i++)
 				{
-					hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->downloadTxtColour);
-					prevPositions = &instance->dlGraphPositions;
-					startPos = dlRc.left;
-					widthLimit = dlRc.right;
-				}
-				else //Upload
-				{
-					hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->uploadTxtColour);
-					prevPositions = &instance->ulGraphPositions;
-					startPos = dlRc.right;
-					widthLimit = ulRc.right;
-				}
+					int newXPos = 0;
+					int newYPos = 0;
+					double nrmUsage = 0.0;
 
-				if (hPenUser == NULL)
-				{
-					continue;
-				}
-				SelectObject(hdc, hPenUser);
+					int widthLimit = 0;
+					int startPos = 0;
 
-				float maxVal = 0.0;
-				for (int j = 0; j < prevPositions->size(); j++)
-				{
-					if (prevPositions->at(j).mbpsVal > maxVal)
+					//Draw graph
+					std::vector<NetGraphValue>* prevPositions;
+
+					if (i == 0) //Download
 					{
-						maxVal = prevPositions->at(j).mbpsVal;
+						hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->downloadTxtColour);
+						prevPositions = &instance->dlGraphPositions;
+						startPos = dlRc.left;
+						widthLimit = dlRc.right;
 					}
-				}
-
-				if (maxVal < MIN_MAX_USAGE)
-				{
-					maxVal = MIN_MAX_USAGE;
-				}
-
-				for (int j = 0; j < prevPositions->size(); j++)
-				{
-					if (j < prevPositions->size() - 1)
+					else //Upload
 					{
-						NetGraphValue curr = prevPositions->at(j);
-						NetGraphValue nxt = prevPositions->at(j + 1);
-
-						float pNrmVal = curr.mbpsVal / maxVal;
-						int cX = startPos;
-						int cY = (ps.rcPaint.bottom * 0.9) - (((ps.rcPaint.bottom * 0.9) - maxHeight) * pNrmVal);
-
-						float nNrmVal = nxt.mbpsVal / maxVal;
-						int nX = startPos + graphStep;
-						int nY = (ps.rcPaint.bottom * 0.9) - (((ps.rcPaint.bottom * 0.9) - maxHeight) * nNrmVal);
-						MoveToEx(hdc, cX, cY, NULL);
-						LineTo(hdc, nX, nY);
-
-						startPos += graphStep;
+						hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->uploadTxtColour);
+						prevPositions = &instance->ulGraphPositions;
+						startPos = dlRc.right;
+						widthLimit = ulRc.right;
 					}
-				}
 
-				//Push graph along when > window width
-				if (prevPositions->size() > 0 && startPos > widthLimit - 1)
-				{
-					prevPositions->erase(prevPositions->begin());
-				}
+					if (hPenUser == NULL)
+					{
+						continue;
+					}
+					SelectObject(hdc, hPenUser);
 
-				DeleteObject(hPenUser);
+					float maxVal = 0.0;
+					for (int j = 0; j < prevPositions->size(); j++)
+					{
+						if (prevPositions->at(j).mbpsVal > maxVal)
+						{
+							maxVal = prevPositions->at(j).mbpsVal;
+						}
+					}
+
+					if (maxVal < MIN_MAX_USAGE)
+					{
+						maxVal = MIN_MAX_USAGE;
+					}
+
+					for (int j = 0; j < prevPositions->size(); j++)
+					{
+						if (j < prevPositions->size() - 1)
+						{
+							NetGraphValue curr = prevPositions->at(j);
+							NetGraphValue nxt = prevPositions->at(j + 1);
+
+							float pNrmVal = curr.mbpsVal / maxVal;
+							int cX = startPos;
+							int cY = (ps.rcPaint.bottom * 0.9) - (((ps.rcPaint.bottom * 0.9) - maxHeight) * pNrmVal);
+
+							float nNrmVal = nxt.mbpsVal / maxVal;
+							int nX = startPos + graphStep;
+							int nY = (ps.rcPaint.bottom * 0.9) - (((ps.rcPaint.bottom * 0.9) - maxHeight) * nNrmVal);
+							MoveToEx(hdc, cX, cY, NULL);
+							LineTo(hdc, nX, nY);
+
+							startPos += graphStep;
+						}
+					}
+
+					//Push graph along when > window width
+					if (prevPositions->size() > 0 && startPos > widthLimit - 1)
+					{
+						prevPositions->erase(prevPositions->begin());
+					}
+
+					DeleteObject(hPenUser);
+				}
 			}
-
+			
 			EndPaint(hWnd, &ps);
 			break;
 		}
@@ -1660,6 +1694,9 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				Button_SetCheck(chkBtn, FALSE);
 			}
 
+			HWND graphDragCkhBtn = GetDlgItem(hDlg, IDC_ALLOW_GRAPH_CHECK);
+			Button_SetCheck(graphDragCkhBtn, configManager->dragToExposeGraph);
+
 			//Init dropdowns
 			SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
 			SendMessage(hDlg, WM_SETHOVERCBSEL, (WPARAM)TRUE, NULL);
@@ -1839,6 +1876,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				instance->UpdateFontScaleForDPI();
 
 				HWND chkBtn = GetDlgItem(hDlg, IDC_ADAPTER_AUTO_CHECK);
+				HWND dragForGraphChkBtn = GetDlgItem(hDlg, IDC_ALLOW_GRAPH_CHECK);
 				HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
 
 				if (!strcmp((char*)instance->configManager->uniqueAddr, "AUTO"))
@@ -1852,6 +1890,8 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 					Button_SetCheck(chkBtn, FALSE);
 					ComboBox_Enable(dropDown, TRUE);
 				}
+
+				Button_SetCheck(dragForGraphChkBtn, configManager->dragToExposeGraph);
 
 				SendMessage(hDlg, WM_SETHOVERCBSEL, (WPARAM)FALSE, NULL);
 				SendMessage(hDlg, WM_SETCBSEL, (WPARAM)FALSE, NULL);
@@ -1867,34 +1907,42 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			{
 				DialogBox(instance->hInst, MAKEINTRESOURCE(IDD_TEXT), hDlg, TextProc);
 			}
-			else if (HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
+			else if (HIWORD(wParam) == BN_CLICKED)
 			{
-				BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
-				HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
-
-				if (dropDown != NULL)
+				if (LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK) 
 				{
-					instance->tickMutex.lock();
-					ComboBox_Enable(dropDown, !enabled);
+					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
+					HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
 
-					if (enabled)
+					if (dropDown != NULL)
 					{
-						char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
-						strcpy(buf, "AUTO");
-						instance->configManager->UpdateSelectedAdapter(buf);
-						if (instance->settingsWnd != NULL)
+						instance->tickMutex.lock();
+						ComboBox_Enable(dropDown, !enabled);
+
+						if (enabled)
 						{
-							instance->netManager->SetAutoAdaptor();
-							SendMessage(hDlg, WM_SETCBSEL, (WPARAM)FALSE, NULL);
+							char buf[IF_MAX_PHYS_ADDRESS_LENGTH];
+							strcpy(buf, "AUTO");
+							instance->configManager->UpdateSelectedAdapter(buf);
+							if (instance->settingsWnd != NULL)
+							{
+								instance->netManager->SetAutoAdaptor();
+								SendMessage(hDlg, WM_SETCBSEL, (WPARAM)FALSE, NULL);
+							}
 						}
-					}
-					else
-					{
-						instance->UpdateSelectedAdapter(dropDown);
-					}
+						else
+						{
+							instance->UpdateSelectedAdapter(dropDown);
+						}
 
-					instance->netManager->ResetPrev();
-					instance->tickMutex.unlock();
+						instance->netManager->ResetPrev();
+						instance->tickMutex.unlock();
+					}
+				}
+				else if (LOWORD(wParam) == IDC_ALLOW_GRAPH_CHECK) 
+				{
+					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ALLOW_GRAPH_CHECK);
+					configManager->UpdateDragToExposeGraph(enabled);
 				}
 			}
 			else if (HIWORD(wParam) == CBN_SELCHANGE)
