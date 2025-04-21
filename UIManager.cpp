@@ -921,6 +921,25 @@ void UIManager::ResetCursorDragOffset()
 	yDragOffset = -1;
 }
 
+void UIManager::OnGraphClose()
+{
+	int currDPI = GetDpiForWindow(instance->roothWnd);
+	RECT windowRect = { 0 };
+	GetWindowRect(instance->roothWnd, &windowRect);
+	int windowWidth = windowRect.right - windowRect.left;
+	int newWindowHeight = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
+	SetWindowPos(instance->roothWnd, NULL, 0, 0, windowWidth, newWindowHeight, SWP_NOZORDER | SWP_NOMOVE);
+
+	if (instance->dlGraphPositions.size() > 0)
+	{
+		instance->dlGraphPositions.clear();
+	}
+	if (instance->ulGraphPositions.size() > 0)
+	{
+		instance->ulGraphPositions.clear();
+	}
+}
+
 LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	switch (message)
@@ -997,6 +1016,11 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			//Restrict mouse input to current window
 			SetCapture(hWnd);
 
+			if (!configManager->dragToExposeGraph)
+			{
+				break;
+			}
+
 			POINT mousePos;
 
 			//Get the current mouse coordinates
@@ -1056,17 +1080,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			}
 			else
 			{
-				int newWindowHeight = MulDiv(ROOT_INITIAL_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
-				SetWindowPos(hWnd, NULL, 0, 0, windowWidth, newWindowHeight, SWP_NOZORDER | SWP_NOMOVE);
-
-				if (instance->dlGraphPositions.size() > 0)
-				{
-					instance->dlGraphPositions.clear();
-				}
-				if (instance->ulGraphPositions.size() > 0)
-				{
-					instance->ulGraphPositions.clear();
-				}
+				instance->OnGraphClose();
 			}
 
 			instance->ForceRepaint();
@@ -1950,6 +1964,11 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 				else if (LOWORD(wParam) == IDC_ALLOW_GRAPH_CHECK) 
 				{
 					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ALLOW_GRAPH_CHECK);
+
+					if (!enabled)
+					{
+						instance->OnGraphClose();
+					}
 					configManager->UpdateDragToExposeGraph(enabled);
 				}
 			}

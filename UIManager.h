@@ -230,6 +230,7 @@ private:
 	float DivLower(float a, float b);
 	WCHAR* GetStringFromBits(double inBits);
 	void ResetCursorDragOffset();
+	void OnGraphClose();
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
 	bool ShouldDrawGraph();
