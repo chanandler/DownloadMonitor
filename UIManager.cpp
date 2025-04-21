@@ -1025,6 +1025,12 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 			instance->ResetCursorDragOffset();
 			instance->adjustingScale = false;
 			instance->adjustingPos = false;
+
+			if (!configManager->dragToExposeGraph)
+			{
+				break;
+			}
+
 			SetCursor(instance->baseCursor);
 			int currDPI = GetDpiForWindow(hWnd);
 			int snapOpenTarget = MulDiv(GRAPH_SNAP_HEIGHT, currDPI, USER_DEFAULT_SCREEN_DPI);
@@ -1062,6 +1068,8 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					instance->ulGraphPositions.clear();
 				}
 			}
+
+			instance->ForceRepaint();
 			break;
 		}
 		case WM_ERASEBKGND:
