@@ -12,16 +12,31 @@
 #include "shellapi.h"
 #include <windowsx.h>
 #include <tuple>
+#include <mutex>
 
 #define KILOBYTE 1024.0
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define MAX_TOP_CONSUMERS 6
+#define ONE_SECOND 1000000
 
 struct PidData
 {
 public:
 	double inBits;
 	double outBits;
+
+	double prvInBits;
+	double prvOutBits;
+
+	double GetInBits()
+	{
+		return inBits - prvInBits;
+	}
+
+	double GetOutBits()
+	{
+		return outBits - prvOutBits;
+	}
 };
 
 SERVICE_STATUS g_ServiceStatus = {};
@@ -30,6 +45,9 @@ HANDLE g_ServiceStopEvent = nullptr;
 std::map<DWORD, PidData> pidMap;
 
 #define SERVICE_NAME L"DownloadMonitorService"
+
+std::thread processMonitorThread;
+std::mutex pidMutex;
 
 struct ProcessData //Must mirror class in downloadapp client!
 {
@@ -130,152 +148,217 @@ INT EnableNetworkTracing(PMIB_TCPROW2 row)
 	return SetPerTcpConnectionEStats((PMIB_TCPROW)row, TcpConnectionEstatsData, (PUCHAR)&settings, 0, sizeof(TCP_ESTATS_DATA_RW_v0), 0);
 }
 
-//PURPOSE: Get all active processes and return an ordered vector containing their current DL/UL speeds
-std::vector<ProcessData*> GetTopConsumingProcesses()
+void TrackPIDUsage()
 {
-	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
-
-	std::map<int, bool> ignoredIndexes = std::map<int, bool>();
-
-	PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
-
-	if (tcpTbl)
+	while (true) 
 	{
-		for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
+		pidMutex.lock();
+		std::map<int, bool> ignoredIndexes = std::map<int, bool>();
+
+		PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
+		std::map<DWORD, PidData>::iterator it;
+		if (tcpTbl)
 		{
-			if (tcpTbl->table[i].dwState != MIB_TCP_STATE_ESTAB ||
-				tcpTbl->table[i].dwState == MIB_TCP_STATE_CLOSED
-				|| ignoredIndexes[i] == true)
+			//Remove old processes that no longer exit
+			for (it = pidMap.end(); it != pidMap.begin(); it--)
 			{
-				continue;
-			}
-
-			//Get PID
-			//Get TCP row
-			//Pass into GetPerTcpConectioNEStats
-			//Eiter get bandwidth from that or track recv/sent as with main network tracking
-			//Return top consumers bandwidth + process name
-
-			MIB_TCPROW2 row = tcpTbl->table[i];
-
-			TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
-
-			INT status = EnableNetworkTracing(&row);
-
-			if (status == NO_ERROR)
-			{
-				status = GetProcessNetworkData(&row, &pData);
-				if (status != NO_ERROR)
+				bool found = false;
+				for (int j = 0; j < (int)tcpTbl->dwNumEntries; j++)
 				{
-					return allCnsmrs;
+					if (tcpTbl->table[j].dwState != MIB_TCP_STATE_ESTAB ||
+						tcpTbl->table[j].dwState == MIB_TCP_STATE_CLOSED)
+					{
+						continue;
+					}
+					MIB_TCPROW2 row = tcpTbl->table[j];
+					if(pidMap.find(row.dwOwningPid) != pidMap.end())
+					{
+						found = true;
+						break;
+					}
+				}
+
+				if(!found)
+				{
+					pidMap.erase(it);
 				}
 			}
-			else
-			{
-				return allCnsmrs;
-			}
+			
 
-			//These are octects, convert to bits
-			double in = pData.DataBytesIn * 8.0;
-			double out = pData.DataBytesOut * 8.0;
-
-			//Check for any other occurances of this PID (Programs can have multiple processes under the same PID)
-			for (int j = i + 1; j < (int)tcpTbl->dwNumEntries; j++)
+			for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
 			{
-				if (tcpTbl->table[j].dwState != MIB_TCP_STATE_ESTAB ||
-					tcpTbl->table[j].dwState == MIB_TCP_STATE_CLOSED)
+				if (tcpTbl->table[i].dwState != MIB_TCP_STATE_ESTAB ||
+					tcpTbl->table[i].dwState == MIB_TCP_STATE_CLOSED
+					|| ignoredIndexes[i] == true)
 				{
 					continue;
 				}
-				MIB_TCPROW2 kRow = tcpTbl->table[j];
 
-				if (kRow.dwOwningPid == row.dwOwningPid)
+				//Get PID
+				//Get TCP row
+				//Pass into GetPerTcpConectioNEStats
+
+				MIB_TCPROW2 row = tcpTbl->table[i];
+
+				TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
+
+				INT status = EnableNetworkTracing(&row);
+
+				if (status == NO_ERROR)
 				{
-					status = EnableNetworkTracing(&kRow);
-
-					if (status == NO_ERROR)
+					status = GetProcessNetworkData(&row, &pData);
+					if (status != NO_ERROR)
 					{
-						TCP_ESTATS_DATA_ROD_v0 kPData = { 0 };
-
-						status = GetProcessNetworkData(&kRow, &kPData);
-						if (status == NO_ERROR)
-						{
-							in += (kPData.DataBytesIn * 8.0);
-							out += (kPData.DataBytesOut * 8.0);
-							ignoredIndexes[j] = true;
-						}
+						continue;
 					}
-				}
-			}
-
-			double finalIn = 0.0;
-			double finalOut = 0.0;
-
-			bool foundInPrev = false;
-
-			if (pidMap.find(row.dwOwningPid) != pidMap.end())
-			{
-				double prevIn = pidMap[row.dwOwningPid].inBits;
-				double prevOut = pidMap[row.dwOwningPid].outBits;
-
-				if (in >= prevIn && out >= prevOut)
-				{
-					finalIn = in - prevIn;
-					finalOut = out - prevOut;
-
-					foundInPrev = true;
 				}
 				else
 				{
-					pidMap.erase(pidMap.find(row.dwOwningPid));
+					continue;
 				}
-			}
 
-			PidData newData;
-			newData.inBits = in;
-			newData.outBits = out;
+				//These are octects, convert to bits
+				double in = pData.DataBytesIn * 8.0;
+				double out = pData.DataBytesOut * 8.0;
 
-			pidMap[row.dwOwningPid] = newData;
-
-			if (foundInPrev && (finalIn != 0.0 || finalOut != 0.0))
-			{
-				HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, row.dwOwningPid);
-				if (handle)
+				//Check for any other occurances of this PID (Programs can have multiple processes under the same PID)
+				for (int j = i + 1; j < (int)tcpTbl->dwNumEntries; j++)
 				{
-					DWORD bufSize = 1024;
-					WCHAR nameBuf[1024];
-					INT queryResult = QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
-
-					if (queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
+					if (tcpTbl->table[j].dwState != MIB_TCP_STATE_ESTAB ||
+						tcpTbl->table[j].dwState == MIB_TCP_STATE_CLOSED)
 					{
-						swprintf_s(nameBuf, L"System");
+						continue;
 					}
-					CloseHandle(handle);
-					ProcessData* data = new ProcessData(row.dwOwningPid, nameBuf, finalIn, finalOut);
-					if (data)
+					MIB_TCPROW2 kRow = tcpTbl->table[j];
+
+					if (kRow.dwOwningPid == row.dwOwningPid)
 					{
-						bool added = false;
-						for (int j = 0; j < allCnsmrs.size(); j++)
+						status = EnableNetworkTracing(&kRow);
+
+						if (status == NO_ERROR)
 						{
-							if (((finalIn + finalOut) < (allCnsmrs[j]->inBits + allCnsmrs[j]->outBits)) && j > 0)
+							TCP_ESTATS_DATA_ROD_v0 kPData = { 0 };
+
+							status = GetProcessNetworkData(&kRow, &kPData);
+							if (status == NO_ERROR)
 							{
-								allCnsmrs.insert(allCnsmrs.begin() + j - 1, data);
-								added = true;
-								break;
+								in += (kPData.DataBytesIn * 8.0);
+								out += (kPData.DataBytesOut * 8.0);
 							}
 						}
-						if (!added)
-						{
-							allCnsmrs.push_back(data);
-						}
+
+						ignoredIndexes[j] = true;
 					}
+				}
+
+				double prvIn = 0.0;
+				double prvOut = 0.0;
+
+				if (pidMap.find(row.dwOwningPid) != pidMap.end())
+				{
+					prvIn = pidMap[row.dwOwningPid].inBits;
+					prvOut = pidMap[row.dwOwningPid].outBits;
+
+					if (in + out <= 0.0)
+					{
+						pidMap.erase(pidMap.find(row.dwOwningPid));
+						continue;
+					}
+				}
+
+				if (in + out <= 0.0)
+				{
+					continue;
+				}
+
+				//Prevent going to negative if one of these drops to 0
+				if(in < prvIn)
+				{
+					in = 0.0;
+					prvIn = 0.0;
+				}
+
+				if (out < prvOut)
+				{
+					out = 0.0;
+					prvOut = 0.0;
+				}
+
+				PidData newData;
+				newData.inBits = in;
+				newData.outBits = out;
+				newData.prvInBits = prvIn;
+				newData.prvOutBits = prvOut;
+
+				pidMap[row.dwOwningPid] = newData;
+			}
+
+			free(tcpTbl);
+		}
+
+		pidMutex.unlock();
+		//std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
+		if (WaitForSingleObject(g_ServiceStopEvent, 1000) == WAIT_OBJECT_0)
+		{
+			break;
+		}
+	}
+}
+
+//PURPOSE: Get all active processes and return an ordered vector containing their current DL/UL speeds
+std::vector<ProcessData*> GetTopConsumingProcesses()
+{
+	pidMutex.lock();
+	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
+
+	std::map<DWORD, PidData>::iterator it;
+
+	for (it = pidMap.begin(); it != pidMap.end(); it++)
+	{
+		DWORD pid = it->first;
+		PidData pData = it->second;
+		double in = pData.GetInBits();
+		double out = pData.GetOutBits();
+
+		if (in + out <= 0.0)
+		{
+			continue;
+		}
+
+		HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if (handle)
+		{
+			DWORD bufSize = 1024;
+			WCHAR nameBuf[1024];
+			INT queryResult = QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
+
+			if (queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
+			{
+				swprintf_s(nameBuf, L"System");
+			}
+
+			CloseHandle(handle);
+			ProcessData* data = new ProcessData(pid, nameBuf, in, out);
+			if (data)
+			{
+				bool added = false;
+				for (int j = 0; j < allCnsmrs.size(); j++)
+				{
+					if (((in + out) < (allCnsmrs[j]->inBits + allCnsmrs[j]->outBits)) && j > 0)
+					{
+						allCnsmrs.insert(allCnsmrs.begin() + j - 1, data);
+						added = true;
+						break;
+					}
+				}
+				if (!added)
+				{
+					allCnsmrs.push_back(data);
 				}
 			}
 		}
-
-		free(tcpTbl);
 	}
-
+	
 	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
 	int end = allCnsmrs.size() - MAX_TOP_CONSUMERS;
 	if (end < 0)
@@ -296,17 +379,15 @@ std::vector<ProcessData*> GetTopConsumingProcesses()
 		}
 	}
 
+	pidMutex.unlock();
 	return ret;
 }
 
 void RunService()
 {
 	//Create a pipe
-
-	
-
 	//Wait for connection
-	while (true)
+	//while (true)
 	{
 		HANDLE pipe = CreateNamedPipe(
 			L"\\\\.\\pipe\\dm_pipe",
@@ -321,7 +402,7 @@ void RunService()
 
 		if (pipe == NULL || pipe == INVALID_HANDLE_VALUE)
 		{
-			continue;
+			return;
 		}
 
 		BOOL result = ConnectNamedPipe(pipe, NULL);
@@ -329,7 +410,7 @@ void RunService()
 		if (!result)
 		{
 			CloseHandle(pipe);
-			continue;
+			return;
 		}
 
 		//Get data to send
@@ -380,18 +461,20 @@ void WINAPI ServiceMain(DWORD, LPTSTR*) {
 	g_ServiceStatus.dwCurrentState = SERVICE_RUNNING;
 	SetServiceStatus(g_StatusHandle, &g_ServiceStatus);
 
+	processMonitorThread = std::thread(&TrackPIDUsage);
+	processMonitorThread.detach();
 
 	while (true) 
 	{
-		GetTopConsumingProcesses();
 		RunService();
 
-		if (WaitForSingleObject(g_ServiceStopEvent, 1000)) 
+		if (WaitForSingleObject(g_ServiceStopEvent, 500) == WAIT_OBJECT_0)
 		{
 			break;
 		}
 	}
 
+	processMonitorThread.join();
 	g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
 	SetServiceStatus(g_StatusHandle, &g_ServiceStatus);
 }
@@ -399,9 +482,15 @@ void WINAPI ServiceMain(DWORD, LPTSTR*) {
 
 int wmain(int argc, wchar_t* argv[])
 {
-	GetTopConsumingProcesses(); //hack
-	RunService();
-	return 0;
+	//Uncomment to run outside of service
+	
+	/*processMonitorThread = std::thread(&TrackPIDUsage);
+	processMonitorThread.detach();
+	while (true) 
+	{
+		RunService();
+	}*/
+
 	SERVICE_TABLE_ENTRY ServiceTable[] =
 	{
 		{ (LPWSTR)SERVICE_NAME, ServiceMain },
