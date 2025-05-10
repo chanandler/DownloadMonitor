@@ -164,6 +164,7 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 #ifdef USE_ACTIVATION
 	instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
 #endif
+
 	//netManager->GetProcessUsageTable();
 	//ShowTopConsumersToolTip();
 }
@@ -316,7 +317,11 @@ void UIManager::UpdateInfo()
 			WCHAR pNames[POPUP_BUF_SIZE];
 			memset(pNames, 0, POPUP_BUF_SIZE);
 
-			std::vector<ProcessData*> topCnsmrs = netManager->GetTopConsumingProcesses();
+			std::tuple<PipeResult, ProcessData*> resultData = netManager->GetTopConsumingProcesses();
+
+			PipeResult result = std::get<0>(resultData);
+			ProcessData* topCnsmrs = std::get<1>(resultData);
+			int size = 0;
 
 			//Go through 0 -> max and re-use items that exist, or delete items that beyond the current vector size
 			for (int i = 0; i < MAX_TOP_CONSUMERS; i++)
@@ -328,14 +333,14 @@ void UIManager::UpdateInfo()
 				//See if we have an item at this index
 				BOOL existingItem = ListView_GetItem(instance->popup, &lvI);
 
-				if (existingItem == TRUE && i > topCnsmrs.size() - 1) //Delete ones beyond the size of the process list
+				if (existingItem == TRUE && topCnsmrs[i].IsBlank()) //Delete ones beyond the size of the process list
 				{
 					ListView_DeleteItem(instance->popup, lvI.iItem);
 				}
-				else if (topCnsmrs.size() > 0 && i < topCnsmrs.size())
+				else if (!topCnsmrs[i].IsBlank())
 				{
-					ProcessData* pData = topCnsmrs[i];
-					LPWSTR exeName = PathFindFileName(topCnsmrs[i]->name);
+					ProcessData* pData = &topCnsmrs[i];
+					LPWSTR exeName = PathFindFileName(pData->name);
 
 					if (exeName != NULL)
 					{
@@ -344,7 +349,7 @@ void UIManager::UpdateInfo()
 						lvI.iItem = i;
 						lvI.iSubItem = 0;
 						lvI.pszText = exeName;
-						lvI.lParam = (LPARAM)(double)(topCnsmrs[i]->inBits + topCnsmrs[i]->outBits);
+						lvI.lParam = (LPARAM)(double)(pData->inBits + pData->outBits);
 					}
 
 					if (existingItem == FALSE)
@@ -358,7 +363,7 @@ void UIManager::UpdateInfo()
 
 					lvI.mask = LVIF_TEXT;
 
-					WCHAR* dlStr = instance->GetStringFromBits(topCnsmrs[i]->inBits);
+					WCHAR* dlStr = instance->GetStringFromBits(pData->inBits);
 					if (dlStr)
 					{
 						//Download column
@@ -368,7 +373,7 @@ void UIManager::UpdateInfo()
 						free(dlStr);
 					}
 
-					WCHAR* ulStr = instance->GetStringFromBits(topCnsmrs[i]->outBits);
+					WCHAR* ulStr = instance->GetStringFromBits(pData->outBits);
 					if (ulStr)
 					{
 						//Upload column
@@ -383,10 +388,7 @@ void UIManager::UpdateInfo()
 			//Use our comparison func to sort in descending order
 			ListView_SortItems(instance->popup, instance->PopupCompare, 0);
 
-			for (int i = 0; i < topCnsmrs.size(); i++)
-			{
-				delete topCnsmrs[i];
-			}
+			delete[] topCnsmrs;
 		}
 
 		if (instance->ShouldDrawGraph())
@@ -708,13 +710,13 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			{
 #endif
 
-				if (instance->netManager->HasElevatedPrivileges())
+				if (true)//instance->netManager->HasElevatedPrivileges())
 				{
 					instance->ShowTopConsumersToolTip(p);
 				}
 				else if (instance->configManager->hoverSetting == HOVER_ENUM::SHOW_ALL)
 				{
-					instance->ShowUnavailableTooptip(p, L"Process monitoring requires elevation (Left-click to attempt)", true);
+					instance->ShowUnavailableTooptip(p, L"Unable to connect to DownloadMonitor service", true);
 				}
 #ifdef USE_ACTIVATION
 

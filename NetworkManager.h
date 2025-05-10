@@ -20,33 +20,10 @@
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define MAX_TOP_CONSUMERS 6
 
-class ProcessData
+enum PipeResult 
 {
-public:
-	DWORD pid;
-	WCHAR* name;
-	double inBits;
-	double outBits;
-
-	bool skip = false;
-
-	ProcessData(DWORD Pid, WCHAR* Name, double InBits, double OutBits)
-	{
-		pid = Pid;
-		name = _wcsdup(Name);
-		inBits = InBits;
-		outBits = OutBits;
-	}
-
-	~ProcessData()
-	{
-		if(!name)
-		{
-			return;
-		}
-
-		free(name);
-	}
+	OK,
+	CONNECTION_FAILED
 };
 
 struct PidData
@@ -54,6 +31,36 @@ struct PidData
 public:
 	double inBits;
 	double outBits;
+};
+
+struct ProcessData //Must mirror class in downloadapp service
+{
+public:
+	DWORD pid;
+	WCHAR name[256];
+	double inBits;
+	double outBits;
+
+	ProcessData()
+	{
+		inBits = -1;
+		outBits = -1;
+		pid = -1;
+		memset(&name[0], 0, 255);
+	};
+
+	ProcessData(DWORD Pid, WCHAR* Name, double InBits, double OutBits)
+	{
+		pid = Pid;
+		wcscpy_s(&name[0], 256, Name);
+		inBits = InBits;
+		outBits = OutBits;
+	}
+
+	bool IsBlank() 
+	{
+		return inBits + outBits <= 0.0;
+	}
 };
 
 class NetworkManager
@@ -67,7 +74,7 @@ public:
 	INT GetProcessNetworkData(PMIB_TCPROW2 row, TCP_ESTATS_DATA_ROD_v0* data);
 	INT EnableNetworkTracing(PMIB_TCPROW2 row);
 	bool HasElevatedPrivileges();
-	std::vector<ProcessData*> GetTopConsumingProcesses();
+	std::tuple<PipeResult, ProcessData*> GetTopConsumingProcesses();
 	std::map<DWORD, PidData> pidMap;
 	UCHAR currentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
 	NetworkManager();
@@ -77,6 +84,7 @@ private:
 	double lastUlCount = -1.0;
 
 	PMIB_TCPTABLE2 GetAllocatedTcpTable();
+
 
 	//int cacheIndex = -1;
 };

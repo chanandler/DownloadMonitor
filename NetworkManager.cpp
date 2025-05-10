@@ -254,171 +254,208 @@ PMIB_TCPTABLE2 NetworkManager::GetAllocatedTcpTable()
 	return tcpTbl;
 }
 
-//PURPOSE: Get all active processes and return an ordered vector containing their current DL/UL speeds
-std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
+std::tuple<PipeResult, ProcessData*> NetworkManager::GetTopConsumingProcesses()
 {
-	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
+	//This logic has been moved to a service
+	//Read it back in here via a named pipe
+	ProcessData* recvData = new ProcessData[MAX_TOP_CONSUMERS];
 
-	std::map<int, bool> ignoredIndexes = std::map<int, bool>();
+	HANDLE pipe = CreateFile(
+		L"\\\\.\\pipe\\dm_pipe",
+		GENERIC_READ,
+		FILE_SHARE_READ | FILE_SHARE_WRITE,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL
+	);
 
-	PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
-
-	if (tcpTbl)
+	if(pipe == NULL || pipe == INVALID_HANDLE_VALUE)
 	{
-		for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
-		{
-			if (tcpTbl->table[i].dwState != MIB_TCP_STATE_ESTAB ||
-				tcpTbl->table[i].dwState == MIB_TCP_STATE_CLOSED
-				|| ignoredIndexes[i] == true)
-			{
-				continue;
-			}
-
-			//Get PID
-			//Get TCP row
-			//Pass into GetPerTcpConectioNEStats
-			//Eiter get bandwidth from that or track recv/sent as with main network tracking
-			//Return top consumers bandwidth + process name
-
-			MIB_TCPROW2 row = tcpTbl->table[i];
-
-			TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
-
-			INT status = EnableNetworkTracing(&row);
-
-			if (status == NO_ERROR)
-			{
-				status = GetProcessNetworkData(&row, &pData);
-				if (status != NO_ERROR)
-				{
-					return allCnsmrs;
-				}
-			}
-			else
-			{
-				return allCnsmrs;
-			}
-
-			//These are octects, convert to bits
-			double in = pData.DataBytesIn * 8.0;
-			double out = pData.DataBytesOut * 8.0;
-
-			//Check for any other occurances of this PID (Programs can have multiple processes under the same PID)
-			for (int j = i + 1; j < (int)tcpTbl->dwNumEntries; j++)
-			{
-				if (tcpTbl->table[j].dwState != MIB_TCP_STATE_ESTAB ||
-					tcpTbl->table[j].dwState == MIB_TCP_STATE_CLOSED)
-				{
-					continue;
-				}
-				MIB_TCPROW2 kRow = tcpTbl->table[j];
-
-				if (kRow.dwOwningPid == row.dwOwningPid)
-				{
-					status = EnableNetworkTracing(&kRow);
-
-					if (status == NO_ERROR)
-					{
-						TCP_ESTATS_DATA_ROD_v0 kPData = { 0 };
-
-						status = GetProcessNetworkData(&kRow, &kPData);
-						if (status == NO_ERROR)
-						{
-							in += (kPData.DataBytesIn * 8.0);
-							out += (kPData.DataBytesOut * 8.0);
-							ignoredIndexes[j] = true;
-						}
-					}
-				}
-			}
-
-			double finalIn = 0.0;
-			double finalOut = 0.0;
-
-			bool foundInPrev = false;
-
-			if (pidMap.find(row.dwOwningPid) != pidMap.end())
-			{
-				double prevIn = pidMap[row.dwOwningPid].inBits;
-				double prevOut = pidMap[row.dwOwningPid].outBits;
-
-				if (in >= prevIn && out >= prevOut)
-				{
-					finalIn = in - prevIn;
-					finalOut = out - prevOut;
-
-					foundInPrev = true;
-				}
-				else
-				{
-					pidMap.erase(pidMap.find(row.dwOwningPid));
-				}
-			}
-
-			PidData newData;
-			newData.inBits = in;
-			newData.outBits = out;
-
-			pidMap[row.dwOwningPid] = newData;
-
-			if (foundInPrev && (finalIn != 0.0 || finalOut != 0.0))
-			{
-				HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, row.dwOwningPid);
-				if (handle)
-				{
-					DWORD bufSize = 1024;
-					WCHAR nameBuf[1024];
-					INT queryResult = QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
-
-					if (queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
-					{
-						swprintf_s(nameBuf, L"System");
-					}
-					CloseHandle(handle);
-					ProcessData* data = new ProcessData(row.dwOwningPid, nameBuf, finalIn, finalOut);
-					if (data)
-					{
-						bool added = false;
-						for (int j = 0; j < allCnsmrs.size(); j++)
-						{
-							if (((finalIn + finalOut) < (allCnsmrs[j]->inBits + allCnsmrs[j]->outBits)) && j > 0)
-							{
-								allCnsmrs.insert(allCnsmrs.begin() + j - 1, data);
-								added = true;
-								break;
-							}
-						}
-						if (!added)
-						{
-							allCnsmrs.push_back(data);
-						}
-					}
-				}
-			}
-		}
-
-		free(tcpTbl);
+		return std::make_tuple(PipeResult::CONNECTION_FAILED, recvData);
 	}
 
-	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
-	int end = allCnsmrs.size() - MAX_TOP_CONSUMERS;
-	if (end < 0)
-	{
-		end = 0;
-	}
+	DWORD bytesRead = 0;
+	BOOL result = ReadFile(
+		pipe,
+		recvData,
+		sizeof(ProcessData) * MAX_TOP_CONSUMERS,
+		&bytesRead,
+		NULL
+	);
 
-	//Create vec with correct amount of items
-	for (int i = allCnsmrs.size() - 1; i >= 0; i--)
-	{
-		if (i >= end)
-		{
-			ret.push_back(allCnsmrs[i]);
-		}
-		else
-		{
-			delete allCnsmrs[i];
-		}
-	}
+	CloseHandle(pipe);
 
-	return ret;
+	return std::make_tuple(PipeResult::OK, recvData);
 }
+
+//TODO update UI manager to read from the pipe
+
+//PURPOSE: Get all active processes and return an ordered vector containing their current DL/UL speeds
+//std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()
+//{
+//	std::vector<ProcessData*> allCnsmrs = std::vector<ProcessData*>();
+//
+//	std::map<int, bool> ignoredIndexes = std::map<int, bool>();
+//
+//	PMIB_TCPTABLE2 tcpTbl = GetAllocatedTcpTable();
+//
+//	if (tcpTbl)
+//	{
+//		for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
+//		{
+//			if (tcpTbl->table[i].dwState != MIB_TCP_STATE_ESTAB ||
+//				tcpTbl->table[i].dwState == MIB_TCP_STATE_CLOSED
+//				|| ignoredIndexes[i] == true)
+//			{
+//				continue;
+//			}
+//
+//			//Get PID
+//			//Get TCP row
+//			//Pass into GetPerTcpConectioNEStats
+//			//Eiter get bandwidth from that or track recv/sent as with main network tracking
+//			//Return top consumers bandwidth + process name
+//
+//			MIB_TCPROW2 row = tcpTbl->table[i];
+//
+//			TCP_ESTATS_DATA_ROD_v0 pData = { 0 };
+//
+//			INT status = EnableNetworkTracing(&row);
+//
+//			if (status == NO_ERROR)
+//			{
+//				status = GetProcessNetworkData(&row, &pData);
+//				if (status != NO_ERROR)
+//				{
+//					return allCnsmrs;
+//				}
+//			}
+//			else
+//			{
+//				return allCnsmrs;
+//			}
+//
+//			//These are octects, convert to bits
+//			double in = pData.DataBytesIn * 8.0;
+//			double out = pData.DataBytesOut * 8.0;
+//
+//			//Check for any other occurances of this PID (Programs can have multiple processes under the same PID)
+//			for (int j = i + 1; j < (int)tcpTbl->dwNumEntries; j++)
+//			{
+//				if (tcpTbl->table[j].dwState != MIB_TCP_STATE_ESTAB ||
+//					tcpTbl->table[j].dwState == MIB_TCP_STATE_CLOSED)
+//				{
+//					continue;
+//				}
+//				MIB_TCPROW2 kRow = tcpTbl->table[j];
+//
+//				if (kRow.dwOwningPid == row.dwOwningPid)
+//				{
+//					status = EnableNetworkTracing(&kRow);
+//
+//					if (status == NO_ERROR)
+//					{
+//						TCP_ESTATS_DATA_ROD_v0 kPData = { 0 };
+//
+//						status = GetProcessNetworkData(&kRow, &kPData);
+//						if (status == NO_ERROR)
+//						{
+//							in += (kPData.DataBytesIn * 8.0);
+//							out += (kPData.DataBytesOut * 8.0);
+//							ignoredIndexes[j] = true;
+//						}
+//					}
+//				}
+//			}
+//
+//			double finalIn = 0.0;
+//			double finalOut = 0.0;
+//
+//			bool foundInPrev = false;
+//
+//			if (pidMap.find(row.dwOwningPid) != pidMap.end())
+//			{
+//				double prevIn = pidMap[row.dwOwningPid].inBits;
+//				double prevOut = pidMap[row.dwOwningPid].outBits;
+//
+//				if (in >= prevIn && out >= prevOut)
+//				{
+//					finalIn = in - prevIn;
+//					finalOut = out - prevOut;
+//
+//					foundInPrev = true;
+//				}
+//				else
+//				{
+//					pidMap.erase(pidMap.find(row.dwOwningPid));
+//				}
+//			}
+//
+//			PidData newData;
+//			newData.inBits = in;
+//			newData.outBits = out;
+//
+//			pidMap[row.dwOwningPid] = newData;
+//
+//			if (foundInPrev && (finalIn != 0.0 || finalOut != 0.0))
+//			{
+//				HANDLE handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, row.dwOwningPid);
+//				if (handle)
+//				{
+//					DWORD bufSize = 1024;
+//					WCHAR nameBuf[1024];
+//					INT queryResult = QueryFullProcessImageName(handle, 0, nameBuf, &bufSize);
+//
+//					if (queryResult != TRUE) //QueryFullProcessImageName fails when being run on system
+//					{
+//						swprintf_s(nameBuf, L"System");
+//					}
+//					CloseHandle(handle);
+//					ProcessData* data = new ProcessData(row.dwOwningPid, nameBuf, finalIn, finalOut);
+//					if (data)
+//					{
+//						bool added = false;
+//						for (int j = 0; j < allCnsmrs.size(); j++)
+//						{
+//							if (((finalIn + finalOut) < (allCnsmrs[j]->inBits + allCnsmrs[j]->outBits)) && j > 0)
+//							{
+//								allCnsmrs.insert(allCnsmrs.begin() + j - 1, data);
+//								added = true;
+//								break;
+//							}
+//						}
+//						if (!added)
+//						{
+//							allCnsmrs.push_back(data);
+//						}
+//					}
+//				}
+//			}
+//		}
+//
+//		free(tcpTbl);
+//	}
+//
+//	std::vector<ProcessData*> ret = std::vector<ProcessData*>();
+//	int end = allCnsmrs.size() - MAX_TOP_CONSUMERS;
+//	if (end < 0)
+//	{
+//		end = 0;
+//	}
+//
+//	//Create vec with correct amount of items
+//	for (int i = allCnsmrs.size() - 1; i >= 0; i--)
+//	{
+//		if (i >= end)
+//		{
+//			ret.push_back(allCnsmrs[i]);
+//		}
+//		else
+//		{
+//			delete allCnsmrs[i];
+//		}
+//	}
+//
+//	return ret;
+//}
