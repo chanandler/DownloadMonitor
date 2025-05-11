@@ -19,6 +19,8 @@
 #define MAX_TOP_CONSUMERS 6
 #define ONE_SECOND 1000000
 
+#define STANDALONE //Uncomment to run outside of service
+
 struct PidData
 {
 public:
@@ -36,6 +38,11 @@ public:
 	double GetOutBits()
 	{
 		return outBits - prvOutBits;
+	}
+
+	bool SkipThisTick()
+	{
+		return (prvInBits == 0 && prvOutBits == 0);
 	}
 };
 
@@ -297,11 +304,14 @@ void TrackPIDUsage()
 		}
 
 		pidMutex.unlock();
-		//std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
+#ifdef STANDALONE
+		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
+#else
 		if (WaitForSingleObject(g_ServiceStopEvent, 1000) == WAIT_OBJECT_0)
 		{
 			break;
 		}
+#endif
 	}
 }
 
@@ -317,6 +327,11 @@ std::vector<ProcessData*> GetTopConsumingProcesses()
 	{
 		DWORD pid = it->first;
 		PidData pData = it->second;
+
+		if (pData.SkipThisTick()) 
+		{
+			continue;
+		}
 		double in = pData.GetInBits();
 		double out = pData.GetOutBits();
 
@@ -444,6 +459,8 @@ void RunService()
 		{
 			delete data[i];
 		}
+
+		delete[] arrToSend;
 	}
 }
 
@@ -482,14 +499,14 @@ void WINAPI ServiceMain(DWORD, LPTSTR*) {
 
 int wmain(int argc, wchar_t* argv[])
 {
-	//Uncomment to run outside of service
-	
-	/*processMonitorThread = std::thread(&TrackPIDUsage);
+#ifdef STANDALONE	
+	processMonitorThread = std::thread(&TrackPIDUsage);
 	processMonitorThread.detach();
 	while (true) 
 	{
 		RunService();
-	}*/
+	}
+#endif
 
 	SERVICE_TABLE_ENTRY ServiceTable[] =
 	{
