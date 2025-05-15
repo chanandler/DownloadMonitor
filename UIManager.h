@@ -58,7 +58,7 @@
 #define GRAPH_MIN_SNAP_HEIGHT 35 //Height of window we will then snap to minimised
 #define ROOT_MAX_HEIGHT 50
 
-#define VERSION_NUMBER L"Version 0.97"
+#define VERSION_NUMBER L"Version 0.98"
 
 //Fonts use 72 point
 //Ideally we would want to have font sizes < 8/-15
@@ -82,7 +82,7 @@
 #define POPUP_INITIAL_WIDTH 450
 #define POPUP_INITIAL_HEIGHT 150
 
-#define NO_PRIV_POPUP_INITIAL_WIDTH 425
+#define NO_PRIV_POPUP_INITIAL_WIDTH 325
 #define NO_PRIV_POPUP_INITIAL_HEIGHT 25
 
 
@@ -181,7 +181,6 @@ private:
 	void UpdateBitmapColours();
 	void GetMaxScreenRect();
 	COLORREF COLORREFToRGB(COLORREF Col);
-	void DrawGraph();
 
 	bool running = false;
 
@@ -234,7 +233,6 @@ private:
 	void SetBmToColour(BITMAP bm, HBITMAP bmInst, HDC hdc, COLORREF col, std::vector<int> &cacheArr);
 	static void UpdateInfo();
 	bool ShouldDrawGraph();
-	int GetDPIAwareGraphHeight();
 	ATOM RegisterWindowClass(HINSTANCE hInstance);
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
@@ -270,7 +268,6 @@ private:
 	static INT_PTR PopupCompare(LPARAM val1, LPARAM val2, LPARAM lParamSort);
 	void ForceRepaint();
 	void ForceRepaintOnRect(HWND hWnd);
-	bool CanDragToExposeGraph(POINT mousePos, int windowHeight);
 	static UINT_PTR ColourPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	static UINT_PTR FontPickerProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 };

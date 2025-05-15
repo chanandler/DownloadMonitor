@@ -1,5 +1,6 @@
 #include "NetworkManager.h"
 
+#define PIPE_HANDLE L"\\\\.\\pipe\\dm_pipe"
 NetworkManager::NetworkManager()
 {
 
@@ -261,7 +262,7 @@ std::tuple<PipeResult, ProcessData*> NetworkManager::GetTopConsumingProcesses()
 	ProcessData* recvData = new ProcessData[MAX_TOP_CONSUMERS];
 
 	HANDLE pipe = CreateFile(
-		L"\\\\.\\pipe\\dm_pipe",
+		PIPE_HANDLE,
 		GENERIC_READ,
 		FILE_SHARE_READ | FILE_SHARE_WRITE,
 		NULL,
@@ -289,7 +290,28 @@ std::tuple<PipeResult, ProcessData*> NetworkManager::GetTopConsumingProcesses()
 	return std::make_tuple(PipeResult::OK, recvData);
 }
 
-//TODO update UI manager to read from the pipe
+bool NetworkManager::CanCommunicateWithPipe()
+{
+	HANDLE pipe = CreateFile(
+		PIPE_HANDLE,
+		GENERIC_READ,
+		FILE_SHARE_READ | FILE_SHARE_WRITE,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL,
+		NULL
+	);
+
+	bool ret = false;
+
+	if (pipe != NULL && pipe != INVALID_HANDLE_VALUE)
+	{
+		ret = true;
+	}
+
+	CloseHandle(pipe);
+	return ret;
+}
 
 //PURPOSE: Get all active processes and return an ordered vector containing their current DL/UL speeds
 //std::vector<ProcessData*> NetworkManager::GetTopConsumingProcesses()

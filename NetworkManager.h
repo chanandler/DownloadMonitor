@@ -75,6 +75,7 @@ public:
 	INT EnableNetworkTracing(PMIB_TCPROW2 row);
 	bool HasElevatedPrivileges();
 	std::tuple<PipeResult, ProcessData*> GetTopConsumingProcesses();
+	bool CanCommunicateWithPipe();
 	std::map<DWORD, PidData> pidMap;
 	UCHAR currentPhysicalAddress[IF_MAX_PHYS_ADDRESS_LENGTH];
 	NetworkManager();

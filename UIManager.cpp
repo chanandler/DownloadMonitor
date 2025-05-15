@@ -266,13 +266,6 @@ UIManager::~UIManager()
 	delete monitorFinder;
 }
 
-void UIManager::DrawGraph()
-{
-	//HDC dc = GetDC(roothWnd);
-
-	//Graphics graphics(dc);
-}
-
 void UIManager::UpdateInfo()
 {
 	PMIB_IF_TABLE2* interfaces = (PMIB_IF_TABLE2*)malloc(sizeof(PMIB_IF_TABLE2));
@@ -710,7 +703,7 @@ LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LP
 			{
 #endif
 
-				if (true)//instance->netManager->HasElevatedPrivileges())
+				if (instance->netManager->CanCommunicateWithPipe())
 				{
 					instance->ShowTopConsumersToolTip(p);
 				}
@@ -905,14 +898,15 @@ LRESULT UIManager::PopupProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 			instance->popup = NULL;
 			break;
 		}
-		case WM_LBUTTONDOWN:	//Allow user to quickly elevate when in standard mode
-		{
-			if (uIdSubclass != 1)
-			{
-				break;
-			}
-			instance->TryElevate();
-		}
+		//NOT NEEDED NOW THIS IS IN A SERVICE
+		//case WM_LBUTTONDOWN:	//Allow user to quickly elevate when in standard mode
+		//{
+		//	if (uIdSubclass != 1)
+		//	{
+		//		break;
+		//	}
+		//	instance->TryElevate();
+		//}
 	}
 	return DefSubclassProc(hWnd, message, wParam, lParam);
 }

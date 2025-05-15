@@ -19,7 +19,7 @@
 #define MAX_TOP_CONSUMERS 6
 #define ONE_SECOND 1000000
 
-#define STANDALONE //Uncomment to run outside of service
+//#define STANDALONE //Uncomment to run outside of service
 
 struct PidData
 {
