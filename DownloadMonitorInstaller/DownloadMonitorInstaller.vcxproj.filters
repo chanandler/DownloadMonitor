@@ -27,9 +27,15 @@
     <ClInclude Include="DownloadMonitorInstaller.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Installer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DownloadMonitorInstaller.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Installer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -45,5 +51,15 @@
     <Image Include="DownloadMonitorInstaller.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="bitmap1.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\ArrowsSide.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DownloadApp.exe" />
+    <None Include="DownloadMonitorService.exe" />
   </ItemGroup>
 </Project>

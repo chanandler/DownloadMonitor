@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
+   sodipodi:docname="Arrows.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:document-units="mm"
+     showgrid="false"
+     inkscape:zoom="0.67969251"
+     inkscape:cx="-34.574458"
+     inkscape:cy="506.11122"
+     inkscape:window-width="2560"
+     inkscape:window-height="1377"
+     inkscape:window-x="3832"
+     inkscape:window-y="178"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs2">
+    <linearGradient
+       inkscape:collect="always"
+       id="linearGradient3560">
+      <stop
+         style="stop-color:#870009;stop-opacity:1;"
+         offset="0"
+         id="stop3556" />
+      <stop
+         style="stop-color:#c70803;stop-opacity:0.94117647;"
+         offset="0.61263734"
+         id="stop5817" />
+      <stop
+         style="stop-color:#ef4600;stop-opacity:0.90566039;"
+         offset="0.98076922"
+         id="stop3580" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3560"
+       id="linearGradient3564"
+       x1="46.15633"
+       y1="39.148857"
+       x2="46.428234"
+       y2="104.89128"
+       gradientUnits="userSpaceOnUse"
+       spreadMethod="pad" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient3560"
+       id="linearGradient3564-3"
+       x1="46.15633"
+       y1="39.148857"
+       x2="46.428234"
+       y2="104.89128"
+       gradientUnits="userSpaceOnUse"
+       spreadMethod="pad" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:#000000;fill-opacity:1;stroke-width:0.0560001"
+       id="rect2128"
+       width="203.96385"
+       height="305.5329"
+       x="26.814312"
+       y="15.39193"
+       ry="0.13935795" />
+    <g
+       id="g2094"
+       transform="rotate(-21.56036,185.00496,-20.274238)">
+      <path
+         id="rect1827"
+         style="fill:url(#linearGradient3564);fill-opacity:1;fill-rule:nonzero;stroke-width:0.0333221"
+         d="m 48.635162,39.097202 c -0.01668,-0.007 -0.03525,-0.011 -0.05455,-0.011 l -5.226261,-2.76e-4 c -0.0772,0 -0.139037,0.06233 -0.139037,0.139537 L 43.21487,81.70468 33.172424,81.78004 46.148115,103.87252 58.793167,81.588572 48.72011,81.664062 48.719959,39.225728 c 0,-0.0579 -0.03474,-0.10742 -0.08479,-0.128519 z" />
+    </g>
+    <use
+       x="0"
+       y="0"
+       xlink:href="#g2094"
+       id="use2102"
+       transform="rotate(-1.0742303,-575.90806,-1674.473)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2102"
+       id="use2104"
+       transform="translate(-23.809547,90.558851)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2104"
+       id="use2106"
+       transform="translate(34.131604,-12.936978)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2106"
+       id="use2108"
+       transform="translate(-83.952734,-120.28638)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2108"
+       id="use2110"
+       transform="translate(152.43349,86.176869)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2110"
+       id="use2112"
+       transform="translate(-147.67117,-17.911704)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2112"
+       id="use2114"
+       transform="translate(88.08786,124.04803)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2114"
+       id="use2116"
+       transform="translate(-77.993547,-44.545453)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2116"
+       id="use2118"
+       transform="translate(116.05655,29.618258)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2118"
+       id="use2120"
+       transform="translate(-9.5900502,-75.579276)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2120"
+       id="use2122"
+       transform="translate(-90.053771,-115.58765)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2122"
+       id="use2124"
+       transform="translate(36.333642,-12.111214)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2120"
+       id="use2126"
+       transform="translate(-12.936979,-74.318814)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2112"
+       id="use5819"
+       transform="translate(88.08786,124.04803)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2112"
+       id="use5819-5"
+       transform="translate(49.940987,134.17039)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2112"
+       id="use5819-3"
+       transform="translate(11.330414,147.83868)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use2112"
+       id="use5819-53"
+       transform="translate(160.59344,89.028585)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use5819-3"
+       id="use6187"
+       transform="translate(46.7123,59.558181)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use6187"
+       id="use6189"
+       transform="translate(38.148378,-13.62442)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use6189"
+       id="use6191"
+       transform="translate(39.705455,-12.456613)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use6191"
+       id="use6193"
+       transform="translate(38.148378,-13.235152)" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#use6193"
+       id="use6195"
+       transform="translate(-159.60036,49.826453)" />
+  </g>
+</svg>

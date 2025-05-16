@@ -624,7 +624,6 @@ float UIManager::DivLower(float a, float b)
 	return b / a;
 }
 
-
 //For child windows which hold DL/UL texts
 LRESULT CALLBACK UIManager::ChildProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1650,6 +1649,7 @@ INT_PTR CALLBACK UIManager::TrialExpiredProc(HWND hDlg, UINT message, WPARAM wPa
 	}
 	return (INT_PTR)FALSE;
 }
+
 INT_PTR CALLBACK UIManager::AboutProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);

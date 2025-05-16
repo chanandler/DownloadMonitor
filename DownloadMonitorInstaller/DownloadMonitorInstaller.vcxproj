@@ -129,18 +129,26 @@
   <ItemGroup>
     <ClInclude Include="DownloadMonitorInstaller.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="Installer.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DownloadMonitorInstaller.cpp" />
+    <ClCompile Include="Installer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="DownloadMonitorInstaller.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="..\ArrowsSide.bmp" />
+    <Image Include="bitmap1.bmp" />
     <Image Include="DownloadMonitorInstaller.ico" />
     <Image Include="small.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DownloadApp.exe" />
+    <None Include="DownloadMonitorService.exe" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
