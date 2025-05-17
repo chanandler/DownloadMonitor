@@ -1,4 +1,7 @@
-#include "Installer.h"
+﻿#include "Installer.h"
+#include "Commctrl.h"
+#include "windowsx.h"
+#include "uxtheme.h"
 
 Installer* Installer::instance = nullptr;
 
@@ -10,8 +13,9 @@ Installer::Installer(HINSTANCE hInstance, HINSTANCE hPrevInstance)
 }
 
 //TODO
-//Attempt to close the process if it's open
-//Attempt to update the service if it exists
+//Improve how existing process is terminated
+//Launch app unelevated where possible
+   //Maybe keep one instance silently running and use a pipe to launch the app unelevated?
 
 bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -131,9 +135,9 @@ int Installer::MainLoop()
 		L"Next",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
 		350,
-		360,
-		100,
-		50,
+		LOWER_BTN_Y_POS,
+		BTN_STD_WIDTH,
+		BTN_STD_HEIGHT,
 		hWnd,
 		(HMENU)IDC_NEXT,
 		hInst,
@@ -144,9 +148,9 @@ int Installer::MainLoop()
 		L"Back",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
 		245,
-		360,
-		100,
-		50,
+		LOWER_BTN_Y_POS,
+		BTN_STD_WIDTH,
+		BTN_STD_HEIGHT,
 		hWnd,
 		(HMENU)IDC_BACK,
 		hInst,
@@ -157,9 +161,9 @@ int Installer::MainLoop()
 		L"Cancel",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
 		245,
-		360,
-		100,
-		50,
+		LOWER_BTN_Y_POS,
+		BTN_STD_WIDTH,
+		BTN_STD_HEIGHT,
 		hWnd,
 		(HMENU)IDC_CANCEL,
 		hInst,
@@ -170,9 +174,9 @@ int Installer::MainLoop()
 		L"Close",
 		WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
 		350,
-		360,
-		100,
-		50,
+		LOWER_BTN_Y_POS,
+		BTN_STD_WIDTH,
+		BTN_STD_HEIGHT,
 		hWnd,
 		(HMENU)IDC_CANCEL,
 		hInst,
@@ -191,15 +195,34 @@ int Installer::MainLoop()
 		hInst,
 		NULL);
 
+	progressBar = CreateWindow(
+		PROGRESS_CLASS,
+		NULL,
+		WS_CHILD | WS_VISIBLE,
+		200,
+		200,
+		260,
+		20,
+		hWnd,
+		NULL,
+		hInst,
+		NULL);
+
 	HBITMAP bmp = LoadBitmap(hInst, MAKEINTRESOURCE(IDB_SIDE_ARROWS));
 	SendMessage(sideImage, STM_SETIMAGE, (WPARAM)IMAGE_BITMAP, (LPARAM)bmp);
 	UpdateWindow(sideImage);
 
 	SendMessage(title, WM_SETFONT, (WPARAM)titleFont, TRUE);
 	SendMessage(desc, WM_SETFONT, (WPARAM)descFont, TRUE);
+	Static_Enable(installerVersion, FALSE);
+
+	SetWindowTheme(chckbox, L" ", L" "); //Remove ex styles as making modern checkbox have a transparent bg is way more work
+	SendMessage(progressBar, PBM_SETRANGE, 0, MAKELPARAM(0, 100));
 
 	if(defferedSvcInstall)
 	{
+		SetCurrStatus(L"Installing service", 50);
+
 		BuildUI(UIState::INSTALLING);
 
 		const wchar_t* svcPath = L"C:\\Program Files\\DownloadApp";
@@ -211,8 +234,12 @@ int Installer::MainLoop()
 			swprintf_s(fullpath, L"%s\\DownloadMonitorSvc.exe", svcPath);
 
 			CloseServiceIfExists();
+			SetCurrStatus(L"Extracting service", 75);
+
 			if (ExtractResourceToFile(L"SERVICE_EXE", fullpath))
 			{
+				SetCurrStatus(L"Registering service", 90);
+
 				bool svcResult = InstallService(fullpath);
 				if(!svcResult)
 				{
@@ -254,6 +281,22 @@ int Installer::MainLoop()
 	return (int)msg.wParam;
 }
 
+void Installer::SetCurrStatus(const WCHAR* status, int pct)
+{
+	installPct = pct;
+
+	Static_SetText(desc, status);
+	SendMessage(progressBar, PBM_SETPOS, pct, NULL);
+
+	InvalidateRect(hWnd, NULL, TRUE);
+	UpdateWindow(hWnd);
+
+	if(currentState == UIState::INSTALLING)
+	{
+		Sleep(500);
+	}
+}
+
 void Installer::BuildUI(UIState state)
 {
 	switch (state)
@@ -265,6 +308,7 @@ void Installer::BuildUI(UIState state)
 			ShowWindow(backBtn, SW_HIDE);
 			ShowWindow(chckbox, SW_HIDE);
 			ShowWindow(closeBtn, SW_HIDE);
+			ShowWindow(progressBar, SW_HIDE);
 
 			ShowWindow(title, SW_SHOW);
 			Static_SetText(title, L"Welcome to the Download Monitor Setup Wizard");
@@ -283,6 +327,7 @@ void Installer::BuildUI(UIState state)
 			ShowWindow(cancelBtn, SW_HIDE);
 			ShowWindow(chckbox, SW_SHOW);
 			ShowWindow(closeBtn, SW_HIDE);
+			ShowWindow(progressBar, SW_HIDE);
 
 			ShowWindow(title, SW_SHOW);
 			Static_SetText(title, L"Customise your installation");
@@ -300,50 +345,65 @@ void Installer::BuildUI(UIState state)
 			ShowWindow(backBtn, SW_HIDE);
 			ShowWindow(closeBtn, SW_HIDE);
 
+			ShowWindow(progressBar, SW_SHOW);
 			ShowWindow(title, SW_SHOW);
+			ShowWindow(desc, SW_SHOW);
 			Static_SetText(title, L"Installing your selection...");
-			Static_SetText(desc, L"");
-
-			//TODO progress bar
 			break;
 		}
 		case UIState::COMPLETE:
 		{
 			ShowWindow(title, SW_SHOW);
-			Static_SetText(title, L"Instalation complete");
+			Static_SetText(title, L"Installation complete");
 			ShowWindow(closeBtn, SW_SHOW);
 			ShowWindow(desc, SW_HIDE);
 
 			Button_SetText(chckbox, L"Start DownloadMonitor on exit");
 			ShowWindow(chckbox, SW_SHOW);
+			ShowWindow(progressBar, SW_HIDE);
 
 			break;
 		}
 		case UIState::FAILED:
 		{
 			ShowWindow(title, SW_SHOW);
-			Static_SetText(title, L"Instalation failed");
+			Static_SetText(title, L"Installation failed");
 			ShowWindow(closeBtn, SW_SHOW);
 			ShowWindow(desc, SW_SHOW);
-			Static_SetText(desc, L"Sorry, something went wrong with the instalation. Please try again");
+			Static_SetText(desc, L"Sorry, something went wrong with the installation. Please try again");
 
+			ShowWindow(progressBar, SW_HIDE);
 			ShowWindow(chckbox, SW_HIDE);
 			break;
 		}
 	}
 
 	InvalidateRect(hWnd, NULL, TRUE);
+	UpdateWindow(hWnd);
 	currentState = state;
 }
 
 void Installer::CloseServiceIfExists()
 {
 	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+
+	if(hSCManager == NULL)
+	{
+		return;
+	}
+
 	SC_HANDLE hService = OpenService(hSCManager, L"DownloadMonitor_Service", SERVICE_STOP | SERVICE_START | SERVICE_QUERY_STATUS);
+
+	if(hService == NULL)
+	{
+		return;
+	}
+
+	SetCurrStatus(L"Shutting down current service", 60);
 
 	SERVICE_STATUS status = {};
 	ControlService(hService, SERVICE_CONTROL_STOP, &status);
-	Sleep(1000); // Give it time to stop (optional: poll until stopped)
+	Sleep(1000);
 	CloseServiceHandle(hService);
 	CloseServiceHandle(hSCManager);
 }
@@ -440,6 +500,8 @@ ATOM Installer::MyRegisterClass(HINSTANCE hInstance)
 
 void Installer::OnInstallSuccess()
 {
+	SetCurrStatus(L"Complete", 100);
+
 	BuildUI(UIState::COMPLETE);
 }
 
@@ -449,6 +511,7 @@ void Installer::LaunchDownloadMonitor()
 	WCHAR startupBuf[512];
 	swprintf_s(startupBuf, L"C:\\Users\\%s\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DownloadApp.exe", username);
 	SHELLEXECUTEINFO sei = { sizeof(sei) };
+
 	sei.lpFile = startupBuf;
 	sei.nShow = SW_SHOWNORMAL;
 	ShellExecuteExW(&sei);
@@ -465,8 +528,11 @@ void Installer::BeginInstall()
 	wchar_t startupBuf[512];
 	swprintf_s(startupBuf, L"C:\\Users\\%s\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DownloadApp.exe", username);
 
+	SetCurrStatus(L"Closing existing instances of DownloadMonitor...", 10);
 	system("taskkill /im DownloadApp.exe /f"); //TODO a less jank implementation of this
 	Sleep(1000);
+
+	SetCurrStatus(L"Extracting new version", 20);
 
 	if (!ExtractResourceToFile(L"APP_EXE", startupBuf))
 	{
@@ -474,8 +540,12 @@ void Installer::BeginInstall()
 		return;
 	}
 
+	SetCurrStatus(L"Extraction complete", 50);
+
 	if (chckbox && Button_GetCheck(chckbox))
 	{
+		SetCurrStatus(L"Preparing to elevate", 50);
+
 		WCHAR path[MAX_PATH];
 
 		if (GetModuleFileName(NULL, path, MAX_PATH))
@@ -567,7 +637,7 @@ LRESULT CALLBACK Installer::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		}
 		break;
 		case WM_DESTROY:
-			if(Button_GetCheck(instance->chckbox))
+			if(Button_GetCheck(instance->chckbox) && instance->currentState == UIState::COMPLETE)
 			{
 				instance->LaunchDownloadMonitor();
 			}

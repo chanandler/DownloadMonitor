@@ -2,10 +2,13 @@
 #include "framework.h"
 #include "windows.h"
 #include "shellapi.h"
-#include "windowsx.h"
 #include "resource.h"
 
 #define MAX_LOADSTRING 100
+
+#define BTN_STD_HEIGHT 25
+#define BTN_STD_WIDTH 100
+#define LOWER_BTN_Y_POS 390
 
 enum UIState
 {
@@ -24,6 +27,7 @@ public:
 	bool Init(LPWSTR lpCmdLine, int nCmdShow);
 	int MainLoop();
 
+
 private:
 	//Common controls
 	HWND hWnd;
@@ -35,6 +39,7 @@ private:
 	HWND desc;
 	HWND installerVersion;
 	HWND sideImage;
+	HWND progressBar;
 
 	HFONT titleFont;
 	HFONT descFont;
@@ -42,6 +47,8 @@ private:
 	static Installer* instance;
 
 	HWND chckbox;
+
+	int installPct = 0;
 
 	HINSTANCE hInst;                                // current instance
 	HINSTANCE hPrevInst;                                // current instance
@@ -58,12 +65,14 @@ private:
 	ATOM MyRegisterClass(HINSTANCE hInstance);
 	void OnInstallSuccess();
 	void LaunchDownloadMonitor();
+	bool LaunchUnelevated(LPCWSTR appPath, LPCWSTR args = nullptr);
 	HFONT CreateNewFont(int width, int height, LPWSTR name);
 	void BeginInstall();
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	bool ExtractResourceToFile(LPCWSTR resName, LPCWSTR outPath);
 	static INT_PTR About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 	wchar_t username[512];
+	void SetCurrStatus(const WCHAR* status, int pct);
 
 	bool defferedSvcInstall = false;
 };
