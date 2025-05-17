@@ -17,7 +17,7 @@ bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 {
 	UNREFERENCED_PARAMETER(hPrevInst);
 	UNREFERENCED_PARAMETER(lpCmdLine);
-
+	
 	// Initialize global strings
 	LoadStringW(hInst, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
 	LoadStringW(hInst, IDC_DOWNLOADMONITORINSTALLER, szWindowClass, MAX_LOADSTRING);
@@ -66,8 +66,8 @@ int Installer::MainLoop()
 	const WCHAR* titleFontName = L"Arial Rounded MT Bold";
 	const WCHAR* descFontName = L"Lato Light";
 	//Fonts
-	titleFont = CreateNewFont(10, 20, (WCHAR*)&titleFontName);
-	descFont = CreateNewFont(8, 16, (WCHAR*)&descFontName);
+	titleFont = CreateNewFont(10, 23, (WCHAR*)&titleFontName);
+	descFont = CreateNewFont(8, 20, (WCHAR*)&descFontName);
 
 	//Create common controls we will re-use later
 
@@ -78,7 +78,7 @@ int Installer::MainLoop()
 		200,         // x position 
 		10,         // y position 
 		250,        // Width
-		60,        // Height
+		80,        // Height
 		hWnd,     // Parent window
 		NULL,       // No menu.
 		hInst,
@@ -91,7 +91,7 @@ int Installer::MainLoop()
 		L"STATIC",
 		buf,
 		WS_VISIBLE | WS_CHILD,
-		270,
+		250,
 		430,
 		205,
 		22,
@@ -107,7 +107,7 @@ int Installer::MainLoop()
 		200,
 		90,
 		250,
-		50,
+		80,
 		hWnd,
 		(HMENU)IDC_SVCCHK,
 		hInst,
@@ -210,6 +210,7 @@ int Installer::MainLoop()
 			WCHAR fullpath[256];
 			swprintf_s(fullpath, L"%s\\DownloadMonitorSvc.exe", svcPath);
 
+			CloseServiceIfExists();
 			if (ExtractResourceToFile(L"SERVICE_EXE", fullpath))
 			{
 				bool svcResult = InstallService(fullpath);
@@ -221,6 +222,10 @@ int Installer::MainLoop()
 				{
 					OnInstallSuccess();
 				}
+			}
+			else
+			{
+				BuildUI(UIState::FAILED);
 			}
 		}
 		else
@@ -331,6 +336,18 @@ void Installer::BuildUI(UIState state)
 	currentState = state;
 }
 
+void Installer::CloseServiceIfExists()
+{
+	SC_HANDLE hSCManager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+	SC_HANDLE hService = OpenService(hSCManager, L"DownloadMonitor_Service", SERVICE_STOP | SERVICE_START | SERVICE_QUERY_STATUS);
+
+	SERVICE_STATUS status = {};
+	ControlService(hService, SERVICE_CONTROL_STOP, &status);
+	Sleep(1000); // Give it time to stop (optional: poll until stopped)
+	CloseServiceHandle(hService);
+	CloseServiceHandle(hSCManager);
+}
+
 bool Installer::InstallService(LPCWSTR path)
 {
 	SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
@@ -352,13 +369,18 @@ bool Installer::InstallService(LPCWSTR path)
 
 	if (service == NULL)
 	{
-		/*DWORD err = GetLastError();
+		//We already have service, exe has been updated so just start it again
+		service = OpenService(scm, L"DownloadMonitor_Service", SERVICE_STOP | SERVICE_START | SERVICE_QUERY_STATUS);
 
-		WCHAR buf[256];
-		swprintf_s(buf, L"Failed to install service! Error %d", err);
-		MessageBox(hWnd, buf, L"Error", MB_ICONERROR);*/
+		if(service == NULL)
+		{
+			DWORD err = GetLastError();
+			WCHAR buf[256];
+			swprintf_s(buf, L"Failed to install service! Error %d", err);
+			MessageBox(hWnd, buf, L"Error", MB_ICONERROR);
 
-		return false;
+			return false;
+		}
 	}
 
 	if (service)
@@ -367,7 +389,7 @@ bool Installer::InstallService(LPCWSTR path)
 
 		if (!started)
 		{
-			//MessageBox(hWnd, L"Failed to start service!", L"Error", MB_ICONERROR);
+			MessageBox(hWnd, L"Failed to start service!", L"Error", MB_ICONERROR);
 			CloseServiceHandle(service);
 			return false;
 		}
@@ -423,12 +445,12 @@ void Installer::OnInstallSuccess()
 
 void Installer::LaunchDownloadMonitor()
 {
-	wchar_t startupBuf[512];
+	//TODO find a way to lanch this unelevated
+	WCHAR startupBuf[512];
 	swprintf_s(startupBuf, L"C:\\Users\\%s\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DownloadApp.exe", username);
 	SHELLEXECUTEINFO sei = { sizeof(sei) };
 	sei.lpFile = startupBuf;
 	sei.nShow = SW_SHOWNORMAL;
-
 	ShellExecuteExW(&sei);
 }
 
@@ -442,6 +464,9 @@ void Installer::BeginInstall()
 {
 	wchar_t startupBuf[512];
 	swprintf_s(startupBuf, L"C:\\Users\\%s\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DownloadApp.exe", username);
+
+	system("taskkill /im DownloadApp.exe /f"); //TODO a less jank implementation of this
+	Sleep(1000);
 
 	if (!ExtractResourceToFile(L"APP_EXE", startupBuf))
 	{
@@ -464,6 +489,10 @@ void Installer::BeginInstall()
 			if (!ShellExecuteExW(&sei))
 			{
 				MessageBox(hWnd, L"Installing service requires elevation!", L"Error", MB_ICONERROR);
+			}
+			else
+			{
+				ExitProcess(0);
 			}
 		}
 	}

@@ -17,7 +17,7 @@
 #define KILOBYTE 1024.0
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define MAX_TOP_CONSUMERS 6
-#define ONE_SECOND 1000000
+#define ONE_SECOND 1000
 
 //#define STANDALONE //Uncomment to run outside of service
 
@@ -54,6 +54,7 @@ std::map<DWORD, PidData> pidMap;
 #define SERVICE_NAME L"DownloadMonitorService"
 
 std::thread processMonitorThread;
+std::thread serviceThread;
 std::mutex pidMutex;
 
 struct ProcessData //Must mirror class in downloadapp client!
@@ -96,11 +97,16 @@ VOID WINAPI SvcCtrlHandler(DWORD dwCtrl)
 			//ReportSvcStatus(SERVICE_STOP_PENDING, NO_ERROR, 0);
 
 			// Signal the service to stop.
-
+			g_ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
+			SetServiceStatus(g_StatusHandle, &g_ServiceStatus);
 			SetEvent(g_ServiceStopEvent);
 			//ReportSvcStatus(gSvcStatus.dwCurrentState, NO_ERROR, 0);
+			processMonitorThread.join();
+			serviceThread.join();
 
-			return;
+			g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
+			SetServiceStatus(g_StatusHandle, &g_ServiceStatus);
+			break;
 
 		case SERVICE_CONTROL_INTERROGATE:
 			break;
@@ -305,9 +311,9 @@ void TrackPIDUsage()
 
 		pidMutex.unlock();
 #ifdef STANDALONE
-		std::this_thread::sleep_for(std::chrono::microseconds(ONE_SECOND));
+		std::this_thread::sleep_for(std::chrono::milliseconds(ONE_SECOND));
 #else
-		if (WaitForSingleObject(g_ServiceStopEvent, 1000) == WAIT_OBJECT_0)
+		if (WaitForSingleObject(g_ServiceStopEvent, ONE_SECOND) == WAIT_OBJECT_0)
 		{
 			break;
 		}
@@ -402,7 +408,7 @@ void RunService()
 {
 	//Create a pipe
 	//Wait for connection
-	//while (true)
+	while (true)
 	{
 		HANDLE pipe = CreateNamedPipe(
 			L"\\\\.\\pipe\\dm_pipe",
@@ -461,6 +467,14 @@ void RunService()
 		}
 
 		delete[] arrToSend;
+#ifdef STANDALONE
+		std::this_thread::sleep_for(std::chrono::milliseconds(ONE_SECOND));
+#else
+		if (WaitForSingleObject(g_ServiceStopEvent, ONE_SECOND) == WAIT_OBJECT_0)
+		{
+			break;
+		}
+#endif
 	}
 }
 
@@ -481,19 +495,16 @@ void WINAPI ServiceMain(DWORD, LPTSTR*) {
 	processMonitorThread = std::thread(&TrackPIDUsage);
 	processMonitorThread.detach();
 
+	serviceThread = std::thread(&RunService);
+	serviceThread.detach();
+
 	while (true) 
 	{
-		RunService();
-
-		if (WaitForSingleObject(g_ServiceStopEvent, 500) == WAIT_OBJECT_0)
+		if (WaitForSingleObject(g_ServiceStopEvent, 10) == WAIT_OBJECT_0)
 		{
 			break;
 		}
 	}
-
-	processMonitorThread.join();
-	g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
-	SetServiceStatus(g_StatusHandle, &g_ServiceStatus);
 }
 
 

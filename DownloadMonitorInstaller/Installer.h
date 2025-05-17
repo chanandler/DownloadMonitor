@@ -52,6 +52,7 @@ private:
 
 	UIState currentState;
 	void BuildUI(UIState state);
+	void CloseServiceIfExists();
 	bool InstallService(LPCWSTR path);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	ATOM MyRegisterClass(HINSTANCE hInstance);
