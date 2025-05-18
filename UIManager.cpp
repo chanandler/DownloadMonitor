@@ -161,6 +161,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	std::thread mainThread = std::thread(UpdateInfo);
 	mainThread.detach();
 
+	std::thread installerExitThread = std::thread(AwaitExternalClose);
+	installerExitThread.detach();
+
 #ifdef USE_ACTIVATION
 	instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
 #endif
@@ -517,6 +520,30 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 void UIManager::UpdateOpacity(HWND hWnd)
 {
 	SetLayeredWindowAttributes(hWnd, RGB(0, 0, 0), configManager->opacity, LWA_ALPHA);
+}
+
+void UIManager::AwaitExternalClose()
+{
+	while(instance->running)
+	{
+		HANDLE pipe = CreateFile(
+			INSTALLER_PIPE_HANDLE,
+			GENERIC_READ,
+			FILE_SHARE_READ | FILE_SHARE_WRITE,
+			NULL,
+			OPEN_EXISTING,
+			FILE_ATTRIBUTE_NORMAL,
+			NULL
+		);
+
+		if (pipe != NULL && pipe != INVALID_HANDLE_VALUE)
+		{
+			SendMessage(instance->roothWnd, WM_CLOSE, NULL, NULL);
+			break;
+		}
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+	}
 }
 
 void UIManager::OnSelectItem(int sel)

@@ -85,7 +85,7 @@
 #define NO_PRIV_POPUP_INITIAL_WIDTH 325
 #define NO_PRIV_POPUP_INITIAL_HEIGHT 25
 
-
+#define INSTALLER_PIPE_HANDLE L"\\\\.\\pipe\\installer_pipe"
 
 class BitmapScaleInfo
 {
@@ -237,6 +237,7 @@ private:
 	ATOM RegisterChildWindowClass(HINSTANCE hInstance);
 	HWND InitInstance(HINSTANCE hInstance, int nCmdShow);
 	void UpdateOpacity(HWND hWnd);
+	static void AwaitExternalClose();
 	void OnSelectItem(int sel);
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	void ShowTopConsumersToolTip(POINT pos);

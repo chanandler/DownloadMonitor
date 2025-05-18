@@ -18,6 +18,7 @@
 #define DIV_FACTOR (KILOBYTE * KILOBYTE)
 #define MAX_TOP_CONSUMERS 6
 #define ONE_SECOND 1000
+#define PIPE_NAME L"\\\\.\\pipe\\dm_pipe"
 
 //#define STANDALONE //Uncomment to run outside of service
 
@@ -411,7 +412,7 @@ void RunService()
 	while (true)
 	{
 		HANDLE pipe = CreateNamedPipe(
-			L"\\\\.\\pipe\\dm_pipe",
+			PIPE_NAME,
 			PIPE_ACCESS_OUTBOUND,
 			PIPE_TYPE_BYTE,
 			1,

@@ -100,7 +100,8 @@
       <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies); UxTheme.lib</AdditionalDependencies>
     </Link>
     <Manifest>
-      <AdditionalManifestFiles>../ComCntrls.Manifest</AdditionalManifestFiles>
+      <AdditionalManifestFiles>
+      </AdditionalManifestFiles>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -133,7 +134,8 @@
       <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies); UxTheme.lib</AdditionalDependencies>
     </Link>
     <Manifest>
-      <AdditionalManifestFiles>../ComCntrls.Manifest</AdditionalManifestFiles>
+      <AdditionalManifestFiles>
+      </AdditionalManifestFiles>
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>

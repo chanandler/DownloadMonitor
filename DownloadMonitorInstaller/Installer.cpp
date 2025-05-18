@@ -2,6 +2,7 @@
 #include "Commctrl.h"
 #include "windowsx.h"
 #include "uxtheme.h"
+#include <thread>
 
 Installer* Installer::instance = nullptr;
 
@@ -11,11 +12,6 @@ Installer::Installer(HINSTANCE hInstance, HINSTANCE hPrevInstance)
 	hInst = hInstance;
 	hPrevInst = hPrevInstance;
 }
-
-//TODO
-//Improve how existing process is terminated
-//Launch app unelevated where possible
-   //Maybe keep one instance silently running and use a pipe to launch the app unelevated?
 
 bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -28,7 +24,7 @@ bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 	MyRegisterClass(hInst);
 
 	wcscpy_s(appVer, L"0.98");
-	wcscpy_s(installerVer, L"0.1");
+	wcscpy_s(installerVer, L"0.25");
 
 	// Perform application initialization:
 	hWnd = InitInstance(hInst, nCmdShow);
@@ -51,10 +47,32 @@ bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 		return false;
 	}
 
-	if (!wcscmp(lpCmdLine, L"-installsvc")) //Install service
+	if (!wcsncmp(lpCmdLine, L"-installsvc", 11)) //Install service
 	{
 		defferedSvcInstall = true;
 		
+		//Not working!!
+		/*WCHAR* xPos = wcschr(lpCmdLine + 11, L'x');
+
+		if(xPos)
+		{
+			xPos += 2;
+			WCHAR* xEnd = wcschr(xPos, L'-');
+			int x = wcstol(xPos, &xEnd, 10);
+
+			WCHAR* yStart = xEnd + 2;
+			int end = wcslen(lpCmdLine);
+			int y = wcstol(xPos, &lpCmdLine + end, 10);
+
+			RECT rc = { 0 };
+			GetWindowRect(hWnd, &rc);
+
+			int width = rc.right - rc.left;
+			int height = rc.bottom - rc.top;
+
+			MoveWindow(hWnd, x, y, width, height, FALSE);
+		}*/
+
 		//return true;
 	}
 
@@ -95,9 +113,9 @@ int Installer::MainLoop()
 		L"STATIC",
 		buf,
 		WS_VISIBLE | WS_CHILD,
-		250,
+		240,
 		430,
-		205,
+		225,
 		22,
 		hWnd,
 		(HMENU)IDC_SVCCHK,
@@ -500,14 +518,13 @@ ATOM Installer::MyRegisterClass(HINSTANCE hInstance)
 
 void Installer::OnInstallSuccess()
 {
-	SetCurrStatus(L"Complete", 100);
+	SetCurrStatus(L"Complete!", 100);
 
 	BuildUI(UIState::COMPLETE);
 }
 
 void Installer::LaunchDownloadMonitor()
 {
-	//TODO find a way to lanch this unelevated
 	WCHAR startupBuf[512];
 	swprintf_s(startupBuf, L"C:\\Users\\%s\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DownloadApp.exe", username);
 	SHELLEXECUTEINFO sei = { sizeof(sei) };
@@ -523,13 +540,54 @@ HFONT Installer::CreateNewFont(int width, int height, LPWSTR name)
 	return newFont;
 }
 
+//Download monitor is set up to terminate whenever this pipe is connected
+void Installer::KillCurrentInstances()
+{
+	HANDLE pipe = CreateNamedPipe(
+		INSTALLER_PIPE_HANDLE,
+		PIPE_ACCESS_OUTBOUND,
+		PIPE_TYPE_BYTE | PIPE_NOWAIT,
+		1,
+		0,
+		0,
+		0,
+		NULL
+	);
+
+	if (pipe == NULL || pipe == INVALID_HANDLE_VALUE)
+	{
+		return;
+	}
+
+	int secondsElapsed = 0;
+	while(true)
+	{
+		if(secondsElapsed >= 5)
+		{
+			break;
+		}
+		ConnectNamedPipe(pipe, NULL);
+
+		DWORD err = GetLastError();
+		if(err == ERROR_PIPE_CONNECTED || err == ERROR_NO_DATA)
+		{
+			break;
+		}
+		
+		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+		secondsElapsed++;
+	}
+	CloseHandle(pipe);
+}
+
 void Installer::BeginInstall()
 {
 	wchar_t startupBuf[512];
 	swprintf_s(startupBuf, L"C:\\Users\\%s\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\DownloadApp.exe", username);
 
 	SetCurrStatus(L"Closing existing instances of DownloadMonitor...", 10);
-	system("taskkill /im DownloadApp.exe /f"); //TODO a less jank implementation of this
+	
+	KillCurrentInstances();
 	Sleep(1000);
 
 	SetCurrStatus(L"Extracting new version", 20);
@@ -544,21 +602,29 @@ void Installer::BeginInstall()
 
 	if (chckbox && Button_GetCheck(chckbox))
 	{
-		SetCurrStatus(L"Preparing to elevate", 50);
+		SetCurrStatus(L"Preparing to elevate...", 50);
+
+		RECT rc = { 0 };
+		GetWindowRect(hWnd, &rc);
 
 		WCHAR path[MAX_PATH];
+
+		WCHAR args[256];
+
+		swprintf_s(args, L"-installsvc -x=%d -y=%d", rc.left, rc.top);
 
 		if (GetModuleFileName(NULL, path, MAX_PATH))
 		{
 			SHELLEXECUTEINFO sei = { sizeof(sei) };
 			sei.lpVerb = L"runas";
 			sei.lpFile = path;
-			sei.lpParameters = L"-installsvc";
+			sei.lpParameters = args;
 			sei.nShow = SW_SHOWNORMAL;
 
 			if (!ShellExecuteExW(&sei))
 			{
 				MessageBox(hWnd, L"Installing service requires elevation!", L"Error", MB_ICONERROR);
+				BuildUI(UIState::COMPLETE);
 			}
 			else
 			{

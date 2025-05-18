@@ -10,6 +10,8 @@
 #define BTN_STD_WIDTH 100
 #define LOWER_BTN_Y_POS 390
 
+#define INSTALLER_PIPE_HANDLE L"\\\\.\\pipe\\installer_pipe"
+
 enum UIState
 {
 	FAILED = -1,
@@ -67,6 +69,7 @@ private:
 	void LaunchDownloadMonitor();
 	bool LaunchUnelevated(LPCWSTR appPath, LPCWSTR args = nullptr);
 	HFONT CreateNewFont(int width, int height, LPWSTR name);
+	void KillCurrentInstances();
 	void BeginInstall();
 	static LRESULT WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 	bool ExtractResourceToFile(LPCWSTR resName, LPCWSTR outPath);

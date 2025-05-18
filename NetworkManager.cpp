@@ -287,7 +287,7 @@ std::tuple<PipeResult, ProcessData*> NetworkManager::GetTopConsumingProcesses()
 
 	CloseHandle(pipe);
 
-	return std::make_tuple(PipeResult::OK, recvData);
+	return std::make_tuple(result ? PipeResult::OK : PipeResult::CONNECTION_FAILED, recvData);
 }
 
 bool NetworkManager::CanCommunicateWithPipe()
