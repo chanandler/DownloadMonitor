@@ -20,7 +20,7 @@
 #define ONE_SECOND 1000
 #define PIPE_NAME L"\\\\.\\pipe\\dm_pipe"
 
-#define STANDALONE //Uncomment to run outside of service
+//#define STANDALONE //Uncomment to run outside of service
 
 struct PidData
 {
