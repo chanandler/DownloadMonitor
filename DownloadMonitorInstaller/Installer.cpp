@@ -13,6 +13,14 @@ Installer::Installer(HINSTANCE hInstance, HINSTANCE hPrevInstance)
 	hPrevInst = hPrevInstance;
 }
 
+Installer::~Installer()
+{
+	if(installerIcon != NULL)
+	{
+		DeleteObject(installerIcon);
+	}
+}
+
 bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 {
 	UNREFERENCED_PARAMETER(hPrevInst);
@@ -51,18 +59,18 @@ bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 	{
 		defferedSvcInstall = true;
 		
-		//Not working!!
-		/*WCHAR* xPos = wcschr(lpCmdLine + 11, L'x');
+		WCHAR* xPos = wcschr(lpCmdLine + 11, L'x');
 
 		if(xPos)
 		{
 			xPos += 2;
 			WCHAR* xEnd = wcschr(xPos, L'-');
+			xEnd--;
 			int x = wcstol(xPos, &xEnd, 10);
 
-			WCHAR* yStart = xEnd + 2;
+			WCHAR* yStart = xEnd + 4;
 			int end = wcslen(lpCmdLine);
-			int y = wcstol(xPos, &lpCmdLine + end, 10);
+			int y = wcstol(yStart, &lpCmdLine + end, 10);
 
 			RECT rc = { 0 };
 			GetWindowRect(hWnd, &rc);
@@ -71,9 +79,7 @@ bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 			int height = rc.bottom - rc.top;
 
 			MoveWindow(hWnd, x, y, width, height, FALSE);
-		}*/
-
-		//return true;
+		}
 	}
 
 	return true;
@@ -90,6 +96,8 @@ int Installer::MainLoop()
 	//Fonts
 	titleFont = CreateNewFont(10, 26, (WCHAR*)&titleFontName);
 	descFont = CreateNewFont(8, 20, (WCHAR*)&descFontName);
+
+	SetWindowText(hWnd, L"Download Monitor Setup Wizard");
 
 	//Create common controls we will re-use later
 
@@ -203,13 +211,13 @@ int Installer::MainLoop()
 	sideImage = CreateWindow(
 		L"STATIC",
 		L"ImageWindow",
-		WS_CHILD | WS_GROUP | WS_VISIBLE | SS_BITMAP | SS_CENTERIMAGE,
+		WS_CHILD | WS_GROUP | WS_VISIBLE | SS_OWNERDRAW | SS_CENTERIMAGE,
 		0,
 		0,
 		180,
 		500,
 		hWnd,
-		NULL,
+		(HMENU)IDC_SIDEIMG, 
 		hInst,
 		NULL);
 
@@ -226,9 +234,7 @@ int Installer::MainLoop()
 		hInst,
 		NULL);
 
-	HBITMAP bmp = LoadBitmap(hInst, MAKEINTRESOURCE(IDB_SIDE_ARROWS));
-	SendMessage(sideImage, STM_SETIMAGE, (WPARAM)IMAGE_BITMAP, (LPARAM)bmp);
-	UpdateWindow(sideImage);
+	installerIcon = LoadBitmap(hInst, MAKEINTRESOURCE(IDB_SIDE_ARROWS));
 
 	SendMessage(title, WM_SETFONT, (WPARAM)titleFont, TRUE);
 	SendMessage(desc, WM_SETFONT, (WPARAM)descFont, TRUE);
@@ -293,7 +299,6 @@ int Installer::MainLoop()
 		}
 	}
 
-	DeleteObject(bmp);
 	DeleteObject(titleFont);
 	DeleteObject(descFont);
 	return (int)msg.wParam;
@@ -506,12 +511,12 @@ ATOM Installer::MyRegisterClass(HINSTANCE hInstance)
 	wcex.cbClsExtra = 0;
 	wcex.cbWndExtra = 0;
 	wcex.hInstance = hInstance;
-	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_DOWNLOADMONITORINSTALLER));
+	wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_INSTALLER_ICON));
 	wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszMenuName = NULL;// MAKEINTRESOURCEW(IDC_DOWNLOADMONITORINSTALLER);
 	wcex.lpszClassName = szWindowClass;
-	wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+	wcex.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_INSTALLER_ICON));
 
 	return RegisterClassExW(&wcex);
 }
@@ -690,8 +695,24 @@ LRESULT CALLBACK Installer::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 		{
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hWnd, &ps);
-			// TODO: Add any drawing code that uses hdc here...
+			
+		
+
 			EndPaint(hWnd, &ps);
+		}
+		case WM_DRAWITEM:
+		{
+			LPDRAWITEMSTRUCT lpdis = (LPDRAWITEMSTRUCT)lParam;
+
+			if (lpdis && lpdis->CtlID == IDC_SIDEIMG)
+			{
+				HDC hdc = lpdis->hDC;
+				HDC src = CreateCompatibleDC(hdc);
+				SelectObject(src, instance->installerIcon);
+				StretchBlt(hdc, -50, 0, 385, 575, src, 0, 0, 771,1151, SRCCOPY);
+				DeleteObject(src);
+			}
+
 		}
 		case WM_CTLCOLORSTATIC:
 		{

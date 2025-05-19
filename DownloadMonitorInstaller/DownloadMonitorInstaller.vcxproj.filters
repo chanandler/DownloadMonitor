@@ -57,9 +57,23 @@
     <Image Include="..\ArrowsSide.bmp">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="..\InstallerIcon.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\icon1.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\InstallerIcon.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="..\InstallerIcon.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <None Include="DownloadApp.exe" />
     <None Include="DownloadMonitorService.exe" />
+    <None Include="..\x64\Release\DownloadApp.exe" />
+    <None Include="..\DownloadMonitorService\x64\Release\DownloadMonitorService.exe" />
   </ItemGroup>
 </Project>

@@ -154,11 +154,17 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="..\ArrowsSide.bmp" />
+    <Image Include="..\icon1.ico" />
+    <Image Include="..\InstallerIcon.bmp" />
+    <Image Include="..\InstallerIcon.ico" />
+    <Image Include="..\InstallerIcon.png" />
     <Image Include="bitmap1.bmp" />
     <Image Include="DownloadMonitorInstaller.ico" />
     <Image Include="small.ico" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\DownloadMonitorService\x64\Release\DownloadMonitorService.exe" />
+    <None Include="..\x64\Release\DownloadApp.exe" />
     <None Include="DownloadApp.exe" />
     <None Include="DownloadMonitorService.exe" />
   </ItemGroup>

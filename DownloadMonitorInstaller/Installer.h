@@ -28,7 +28,7 @@ public:
 	Installer(HINSTANCE hInstance, HINSTANCE hPrevInstance);
 	bool Init(LPWSTR lpCmdLine, int nCmdShow);
 	int MainLoop();
-
+	~Installer();
 
 private:
 	//Common controls
@@ -48,6 +48,7 @@ private:
 
 	static Installer* instance;
 
+	HBITMAP installerIcon;
 	HWND chckbox;
 
 	int installPct = 0;
@@ -67,7 +68,6 @@ private:
 	ATOM MyRegisterClass(HINSTANCE hInstance);
 	void OnInstallSuccess();
 	void LaunchDownloadMonitor();
-	bool LaunchUnelevated(LPCWSTR appPath, LPCWSTR args = nullptr);
 	HFONT CreateNewFont(int width, int height, LPWSTR name);
 	void KillCurrentInstances();
 	void BeginInstall();
