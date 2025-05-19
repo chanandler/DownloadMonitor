@@ -88,7 +88,7 @@ int Installer::MainLoop()
 	const WCHAR* titleFontName = L"Arial Rounded MT Bold";
 	const WCHAR* descFontName = L"Lato Light";
 	//Fonts
-	titleFont = CreateNewFont(10, 23, (WCHAR*)&titleFontName);
+	titleFont = CreateNewFont(10, 26, (WCHAR*)&titleFontName);
 	descFont = CreateNewFont(8, 20, (WCHAR*)&descFontName);
 
 	//Create common controls we will re-use later
@@ -127,7 +127,7 @@ int Installer::MainLoop()
 		L"",
 		WS_VISIBLE | WS_CHILD,
 		200,
-		90,
+		100,
 		250,
 		80,
 		hWnd,
@@ -140,7 +140,7 @@ int Installer::MainLoop()
 		L"Install process monitor service",
 		WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON | BS_CHECKBOX,
 		200,
-		160,
+		180,
 		250,
 		50,
 		hWnd,

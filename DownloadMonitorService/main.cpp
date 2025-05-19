@@ -20,7 +20,7 @@
 #define ONE_SECOND 1000
 #define PIPE_NAME L"\\\\.\\pipe\\dm_pipe"
 
-//#define STANDALONE //Uncomment to run outside of service
+#define STANDALONE //Uncomment to run outside of service
 
 struct PidData
 {
@@ -115,7 +115,6 @@ VOID WINAPI SvcCtrlHandler(DWORD dwCtrl)
 		default:
 			break;
 	}
-
 }
 
 PMIB_TCPTABLE2 GetAllocatedTcpTable()
@@ -197,7 +196,6 @@ void TrackPIDUsage()
 					pidMap.erase(it);
 				}
 			}
-			
 
 			for (int i = 0; i < (int)tcpTbl->dwNumEntries; i++)
 			{
@@ -268,35 +266,32 @@ void TrackPIDUsage()
 				double prvIn = 0.0;
 				double prvOut = 0.0;
 
+				//We have a prev for this PID
 				if (pidMap.find(row.dwOwningPid) != pidMap.end())
 				{
-					prvIn = pidMap[row.dwOwningPid].inBits;
-					prvOut = pidMap[row.dwOwningPid].outBits;
-
 					if (in + out <= 0.0)
 					{
 						pidMap.erase(pidMap.find(row.dwOwningPid));
 						continue;
+					}
+
+					prvIn = pidMap[row.dwOwningPid].inBits;
+					prvOut = pidMap[row.dwOwningPid].outBits;
+
+					if(in < prvIn)
+					{
+						prvIn = 0.0;
+					}
+					if(out < prvOut)
+					{
+						prvOut = 0.0f;
 					}
 				}
 
 				if (in + out <= 0.0)
 				{
 					continue;
-				}
-
-				//Prevent going to negative if one of these drops to 0
-				if(in < prvIn)
-				{
-					in = 0.0;
-					prvIn = 0.0;
-				}
-
-				if (out < prvOut)
-				{
-					out = 0.0;
-					prvOut = 0.0;
-				}
+				}		
 
 				PidData newData;
 				newData.inBits = in;
