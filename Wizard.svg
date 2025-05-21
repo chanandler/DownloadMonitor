@@ -118,7 +118,10 @@
        height="255.62315"
        x="4.0808949"
        y="9.3970881"
-       ry="0.40511212" /><image
+       ry="0.40511212"
+       inkscape:export-filename="InstallerIcon.ico.png"
+       inkscape:export-xdpi="25.437445"
+       inkscape:export-ydpi="25.437445" /><image
        width="158.61023"
        height="158.61023"
        preserveAspectRatio="none"

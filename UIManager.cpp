@@ -1762,6 +1762,8 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			HWND secBtn = GetDlgItem(hDlg, IDC_SECONDARY_COLOUR);
 			HWND opacBtn = GetDlgItem(hDlg, IDC_OPACITY);
 			HWND textBtn = GetDlgItem(hDlg, IDC_TEXT);
+			HWND borderBtn = GetDlgItem(hDlg, IDC_BORDER);
+			HWND graphChk = GetDlgItem(hDlg, IDC_ALLOW_GRAPH_CHECK);
 			HWND hoverDropdown = GetDlgItem(hDlg, IDC_MOUSE_OVER_DD);
 
 
@@ -1770,6 +1772,8 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			Button_Enable(secBtn, isActivated);
 			Button_Enable(opacBtn, isActivated);
 			Button_Enable(textBtn, isActivated);
+			Button_Enable(borderBtn, isActivated);
+			Button_Enable(graphChk, isActivated);
 
 			ComboBox_Enable(hoverDropdown, isActivated);
 
@@ -2295,14 +2299,6 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 	{
 		case WM_REFRESHACTIVATIONSTATUS:
 		{
-			//HWND lKeyInput1 = GetDlgItem(hDlg, IDC_LICENSE_KEY1);
-			//HWND lKeyInput2 = GetDlgItem(hDlg, IDC_LICENSE_KEY2);
-			//HWND lKeyInput3 = GetDlgItem(hDlg, IDC_LICENSE_KEY3);
-			//HWND lKeyInput4 = GetDlgItem(hDlg, IDC_LICENSE_KEY4);
-			//HWND lKeyInput5 = GetDlgItem(hDlg, IDC_LICENSE_KEY5);
-
-			//HWND* lKeyInputs[5] = { &lKeyInput1 , &lKeyInput2, &lKeyInput3, &lKeyInput4, &lKeyInput5 };
-
 			HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
 			HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
 			HWND aStatusText = GetDlgItem(hDlg, IDC_ACTIVATION_STATUS);
@@ -2365,6 +2361,7 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 		{
 			if (LOWORD(wParam) == IDC_ACTIVATE)
 			{
+				bool activationResult = false;
 				HWND emailInput = GetDlgItem(hDlg, IDC_EMAIL_ADDRESS);
 				HWND* lKeyInputs = instance->GetLicenseKeyArray(hDlg);
 				std::vector<WCHAR*> strVec; //Store buf from each segment here
@@ -2411,13 +2408,17 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 					if (emailBuf)
 					{
 						GetWindowText(emailInput, emailBuf, lTextLen);
-						instance->activationManager->TryActivate(keyArr, emailBuf);
+						activationResult = instance->activationManager->TryActivate(keyArr, emailBuf);
 						free(emailBuf);
 					}
 
 					SendMessage(hDlg, WM_REFRESHACTIVATIONSTATUS, NULL, NULL);
 				}
 
+				if (!activationResult)
+				{
+					MessageBox(hDlg, L"Invalid email/key!", L"Activation failed", MB_ICONERROR);
+				}
 				delete[] lKeyInputs;
 			}
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCLOSE || LOWORD(wParam) == IDCANCEL)

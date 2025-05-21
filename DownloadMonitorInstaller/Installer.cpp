@@ -32,7 +32,7 @@ bool Installer::Init(LPWSTR lpCmdLine, int nCmdShow)
 	MyRegisterClass(hInst);
 
 	wcscpy_s(appVer, L"0.98");
-	wcscpy_s(installerVer, L"0.25");
+	wcscpy_s(installerVer, L"0.4");
 
 	// Perform application initialization:
 	hWnd = InitInstance(hInst, nCmdShow);
