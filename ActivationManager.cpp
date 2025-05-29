@@ -1,6 +1,8 @@
 #include "ActivationManager.h"
 #include "Windows.h"
 #include <time.h>
+#include <stdio.h>
+#include "Common.h"
 
 //Key/Activation overview:
 //We generate a key with KEY_SIZE digits
@@ -13,9 +15,124 @@
 //When the activation status is set, we save the modification time to an encrypted key elsewhere
 //Then when loading the activation status later, we check the key's current time against the expected time
 
-//TODO
-//Contact key manager server to verify key
+//Contact key manager server to make sure key exists and hasn't been revoked
+SERVER_RESPONSE ActivationManager::ContactKeyServer(WCHAR* emailBuf, int* key)
+{
+	WSAData data;
+	int err;
+	WORD vReq = MAKEWORD(2, 2);
+	err = WSAStartup(vReq, &data);
 
+	if (err != 0)
+	{
+		OnConnectionEnd();
+		return SERVER_RESPONSE::NO_RESPONSE;
+	}
+
+	clientSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+
+	if (clientSock == INVALID_SOCKET)
+	{
+		OnConnectionEnd();
+		return SERVER_RESPONSE::NO_RESPONSE;
+	}
+
+	sockaddr_in service;
+	service.sin_family = AF_INET;
+#pragma warning (push)
+#pragma warning (disable: 4996)
+	service.sin_addr.s_addr = inet_addr("127.0.0.1");
+#pragma warning (pop)
+	service.sin_port = htons(80);
+
+	if (connect(clientSock, (SOCKADDR*)&service, sizeof(service)) == SOCKET_ERROR)
+	{
+		OnConnectionEnd();
+		return SERVER_RESPONSE::NO_RESPONSE;
+	}
+
+	int result = -1;
+
+	char sendBuf[NET_BUF_SIZE];
+
+
+	WCHAR wBuf[256];
+	KeyToWStr(key, wBuf, 256);
+
+	//GetKeyFromReg(wBuf, 256);
+	char* aKey = Common::WideToAnsi(wBuf);
+	char* aEmail = Common::WideToAnsi(emailBuf);
+
+	sprintf_s(sendBuf, "CHECK,%s,%s,", aEmail, aKey);
+
+	delete[] aKey, aEmail;
+
+	result = send(clientSock, sendBuf, strnlen_s(sendBuf, NET_BUF_SIZE), NULL);
+
+	if(result == SOCKET_ERROR)
+	{
+		OnConnectionEnd();
+		return SERVER_RESPONSE::NO_RESPONSE;
+	}
+
+	//Shutdown as we just need to wait for response
+	result = shutdown(clientSock, SD_SEND);
+	if (result == SOCKET_ERROR) 
+	{
+		OnConnectionEnd();
+		return SERVER_RESPONSE::NO_RESPONSE;
+	}
+
+	char recvBuf[NET_BUF_SIZE];
+
+	result = 1;
+	while(result > 0)
+	{
+		result = recv(clientSock, recvBuf, NET_BUF_SIZE, NULL);
+	}
+
+	OnConnectionEnd();
+
+	//Process result
+	if(!strncmp(recvBuf, "STATUS", 6))
+	{
+		char* statusStrt = strchr(&recvBuf[0], ',');
+
+		if(!statusStrt || !(statusStrt + 1))
+		{
+			return SERVER_RESPONSE::NO_RESPONSE;
+		}
+
+		++statusStrt;
+		char* statusEnd = strchr(statusStrt, ',');
+
+		if(!statusEnd)
+		{
+			return SERVER_RESPONSE::NO_RESPONSE;
+		}
+
+		char status[256];
+
+		Common::CopyRange(statusStrt, statusEnd, status, 256);
+
+		if(!strncmp(status, "TRUE", 4))
+		{
+			return SERVER_RESPONSE::VALID_KEY;
+		}
+		else
+		{
+			return SERVER_RESPONSE::INVALID_KEY;
+		}
+	}
+
+	return SERVER_RESPONSE::NO_RESPONSE;
+}
+
+void ActivationManager::OnConnectionEnd()
+{
+	closesocket(clientSock);
+	WSACleanup();
+}
 
 ActivationManager::ActivationManager()
 {
@@ -65,7 +182,7 @@ ActivationManager::ActivationManager()
 
 	RegCloseKey(kHandle);
 }
-	
+
 ACTIVATION_STATE ActivationManager::GetActivationState()
 {
 	HKEY kHandle = { 0 };
@@ -81,7 +198,7 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	}
 
 	//The value for activation status has been modified at a time different to when we last modified it
-	if(!CompareWriteTimes())
+	if (!CompareWriteTimes())
 	{
 		SetActivationState(ACTIVATION_STATE::BYPASS_DETECT);
 		return ACTIVATION_STATE::BYPASS_DETECT;
@@ -98,7 +215,7 @@ ACTIVATION_STATE ActivationManager::GetActivationState()
 	RegCloseKey(kHandle);
 	delete aStatus, bSize;
 
-	if(ret != ACTIVATION_STATE::TRIAL_EXPIRED && ret != ACTIVATION_STATE::ACTIVATED && !TrialActive())
+	if (ret != ACTIVATION_STATE::TRIAL_EXPIRED && ret != ACTIVATION_STATE::ACTIVATED && !TrialActive())
 	{
 		SetActivationState(ACTIVATION_STATE::TRIAL_EXPIRED);
 		return ACTIVATION_STATE::TRIAL_EXPIRED;
@@ -164,7 +281,7 @@ int ActivationManager::GetRemainingTrialDays()
 
 	INT64 remSeconds = ((TICKS_PER_DAY * TRIAL_LENGTH_DAYS) - (time.QuadPart - prevTime.QuadPart));
 
-	if(remSeconds < 0)
+	if (remSeconds < 0)
 	{
 		return 0;
 	}
@@ -262,6 +379,84 @@ void ActivationManager::SetActivationState(ACTIVATION_STATE newState)
 	delete ptr;
 }
 
+
+void ActivationManager::WriteKeyToReg(int* key)
+{
+	HKEY kHandle = { 0 };
+	//Create/open key in reg
+
+	LRESULT kRes = RegCreateKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+		NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS,
+		NULL, &kHandle, NULL);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return;
+	}
+
+	WCHAR keyStr[256];
+	ZeroMemory(keyStr, 256);
+
+	for (int i = 0; i < KEY_SIZE; i++)
+	{
+		WCHAR buf[256];
+		ZeroMemory(buf, 256);
+
+		_itow_s(key[i], buf, 10);
+		buf[10] = 0;
+		wcscat_s(keyStr, buf);
+
+		if (i < KEY_SIZE - 1)
+		{
+			wcscat_s(keyStr, L"-");
+		}
+	}
+
+	LRESULT vRes = RegSetValueEx(kHandle, K_DATA, NULL, REG_SZ, (LPBYTE)&keyStr, 256);
+
+	RegCloseKey(kHandle);
+
+	WriteLastModifiedTime();
+}
+
+void ActivationManager::KeyToWStr(int* key, WCHAR* buf, size_t bufSize)
+{
+	ZeroMemory(buf, 256);
+	WCHAR tempBuf[256];
+
+	for (int i = 0; i < KEY_SIZE; i++)
+	{
+		ZeroMemory(tempBuf, 256);
+		_itow_s(key[i], tempBuf, 10);
+		wcscat(buf, tempBuf);
+
+		if (i < KEY_SIZE - 1)
+		{
+			wcscat(buf, L"-");
+		}
+	}
+}
+
+bool ActivationManager::GetKeyFromReg(WCHAR* buf, DWORD bSize)
+{
+	HKEY kHandle = { 0 };
+	SYSTEMTIME ret = { 0 };
+
+	LRESULT kRes = RegOpenKeyEx(HKEY_CURRENT_USER, REG_STATUS_PATH, NULL,
+		KEY_READ, &kHandle);
+
+	if (kRes != ERROR_SUCCESS || kHandle == NULL)
+	{
+		return false;
+	}
+
+	LSTATUS vRes = RegQueryValueEx(kHandle, K_DATA, NULL, NULL, (LPBYTE)&buf[0], &bSize);
+
+	RegCloseKey(kHandle);
+
+	return (vRes == ERROR_SUCCESS);
+}
+
 void ActivationManager::WriteLastModifiedTime()
 {
 	//Sneaky way to store the last write time on the user's PC
@@ -286,7 +481,7 @@ void ActivationManager::WriteLastModifiedTime()
 
 	//Encode
 	EncryptDecryptString(&buf[0], APP_NAME);
-	
+
 	//Write
 	LRESULT vRes = RegSetValueEx(kHandle, C_DATA, NULL, REG_SZ, (LPBYTE)&buf, 250);
 
@@ -300,7 +495,7 @@ void ActivationManager::CopyRange(wchar_t* strt, wchar_t* end, wchar_t* dst)
 		return;
 	}
 
-	while(strt != end)
+	while (strt != end)
 	{
 		*dst = *strt;
 		++strt;
@@ -345,10 +540,10 @@ bool ActivationManager::CompareWriteTimes()
 	SYSTEMTIME prevSt = WCharToSystemTime(&buf[0], 250);
 
 	//Query actual key
-	
+
 	SYSTEMTIME st = GetStatusKeyWriteTime(); //Get the key's modified value rather than the current time as we're comparing down to the second
 
-	if(prevSt.wYear == st.wYear && prevSt.wMonth == st.wMonth && prevSt.wDay == st.wDay && prevSt.wHour == st.wHour
+	if (prevSt.wYear == st.wYear && prevSt.wMonth == st.wMonth && prevSt.wDay == st.wDay && prevSt.wHour == st.wHour
 		&& prevSt.wMinute == st.wMinute && prevSt.wSecond == st.wSecond)
 	{
 		return true;
@@ -382,7 +577,7 @@ SYSTEMTIME ActivationManager::GetStatusKeyWriteTime()
 
 	return ret;
 }
-	
+
 int ActivationManager::GetUUIDFromStr(wchar_t* str)
 {
 	int ret = 0;
@@ -397,9 +592,9 @@ int ActivationManager::GetUUIDFromStr(wchar_t* str)
 	//Only get first two digits
 	int dCount = CountDigits(ret);
 
-	if (dCount >= 2) 
+	if (dCount >= 2)
 	{
-		for(int i = 0; i < (dCount - 2); i++)
+		for (int i = 0; i < (dCount - 2); i++)
 		{
 			ret /= 10;
 		}
@@ -408,51 +603,58 @@ int ActivationManager::GetUUIDFromStr(wchar_t* str)
 	return ret;
 }
 
-//TODO move this to a seperate key/license program
-void ActivationManager::GenerateKey(wchar_t* prvKey)
-{
-	//Whole key should == a multiple of UUID
-
-	srand((unsigned)time(NULL));
-
-	int key[KEY_SIZE] = { 0 };
-	int uuid = GetUUIDFromStr(prvKey);
-	int total = 0;
-	while (total == 0 || total % uuid != 0)
-	{
-		for (int i = 0; i < KEY_SIZE; i++)
-		{
-			total = 0;
-
-			//Add all digits together
-			for (int j = 0; j < KEY_SIZE; j++)
-			{
-				if (j == i)
-				{
-					continue;
-				}
-				total += key[j];
-			}
-
-			//Add random value between 1>20
-			int rVal = rand() % 21;
-			if (rVal == 0)
-			{
-				++rVal;
-			}
-
-			key[i] = rVal;
-
-			total += rVal;
-		}
-	}
-
-	EncryptDecryptKey(&key[0], prvKey);
-	int v = key[0];
-}
+////TODO move this to a seperate key/license program
+//void ActivationManager::GenerateKey(wchar_t* prvKey)
+//{
+//	//Whole key should == a multiple of UUID
+//
+//	srand((unsigned)time(NULL));
+//
+//	int key[KEY_SIZE] = { 0 };
+//	int uuid = GetUUIDFromStr(prvKey);
+//	int total = 0;
+//	while (total == 0 || total % uuid != 0)
+//	{
+//		for (int i = 0; i < KEY_SIZE; i++)
+//		{
+//			total = 0;
+//
+//			//Add all digits together
+//			for (int j = 0; j < KEY_SIZE; j++)
+//			{
+//				if (j == i)
+//				{
+//					continue;
+//				}
+//				total += key[j];
+//			}
+//
+//			//Add random value between 1>20
+//			int rVal = rand() % 21;
+//			if (rVal == 0)
+//			{
+//				++rVal;
+//			}
+//
+//			key[i] = rVal;
+//
+//			total += rVal;
+//		}
+//	}
+//
+//	EncryptDecryptKey(&key[0], prvKey);
+//	int v = key[0];
+//}
 
 bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 {
+	int* baseKey = (int*)malloc(sizeof(int) * KEY_SIZE);
+
+	if(baseKey)
+	{
+		memcpy(baseKey, key, sizeof(int) * KEY_SIZE);
+	}
+
 	EncryptDecryptKey(&key[0], prvKey);
 
 	if (!ValidateKey(key, prvKey))
@@ -461,13 +663,18 @@ bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 	}
 
 	SetActivationState(ACTIVATION_STATE::ACTIVATED);
+	if (baseKey)
+	{
+		WriteKeyToReg(baseKey);
+		free(baseKey);
+	}
 	return true;
 }
 
 bool ActivationManager::ValidateKey(int* key, wchar_t* prvKey)
 {
 	int uuid = GetUUIDFromStr(prvKey);
-	if (uuid == 0) 
+	if (uuid == 0)
 	{
 		return false;
 	}
@@ -477,7 +684,7 @@ bool ActivationManager::ValidateKey(int* key, wchar_t* prvKey)
 		total += key[i];
 	}
 
-	if (total == 0) 
+	if (total == 0)
 	{
 		return false;
 	}

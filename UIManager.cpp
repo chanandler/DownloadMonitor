@@ -165,7 +165,9 @@ UIManager::UIManager(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdL
 	installerExitThread.detach();
 
 #ifdef USE_ACTIVATION
-	instance->activationManager->GenerateKey((wchar_t*)L"example@domain.com");
+	//Uncomment to test activation server communication
+	//int arr[5] = { 120,110,117,113,126 };
+	//instance->activationManager->ContactKeyServer((WCHAR*)L"test", arr);
 #endif
 
 	//netManager->GetProcessUsageTable();
@@ -524,7 +526,7 @@ void UIManager::UpdateOpacity(HWND hWnd)
 
 void UIManager::AwaitExternalClose()
 {
-	while(instance->running)
+	while (instance->running)
 	{
 		HANDLE pipe = CreateFile(
 			INSTALLER_PIPE_HANDLE,
@@ -1341,7 +1343,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					DeleteObject(hPenUser);
 				}
 			}
-			
+
 			EndPaint(hWnd, &ps);
 			break;
 		}
@@ -1958,7 +1960,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 			}
 			else if (HIWORD(wParam) == BN_CLICKED)
 			{
-				if (LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK) 
+				if (LOWORD(wParam) == IDC_ADAPTER_AUTO_CHECK)
 				{
 					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ADAPTER_AUTO_CHECK);
 					HWND dropDown = GetDlgItem(hDlg, IDC_ADAPTER_DD);
@@ -1988,7 +1990,7 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 						instance->tickMutex.unlock();
 					}
 				}
-				else if (LOWORD(wParam) == IDC_ALLOW_GRAPH_CHECK) 
+				else if (LOWORD(wParam) == IDC_ALLOW_GRAPH_CHECK)
 				{
 					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ALLOW_GRAPH_CHECK);
 
@@ -2408,7 +2410,18 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 					if (emailBuf)
 					{
 						GetWindowText(emailInput, emailBuf, lTextLen);
-						activationResult = instance->activationManager->TryActivate(keyArr, emailBuf);
+
+						SERVER_RESPONSE servResp = instance->activationManager->ContactKeyServer(emailBuf, keyArr);
+
+						if (servResp == SERVER_RESPONSE::INVALID_KEY)
+						{
+							MessageBox(hDlg, L"This key is not registered with the activation server", L"Activation failed", MB_ICONERROR);
+						}
+						else
+						{
+							activationResult = instance->activationManager->TryActivate(keyArr, emailBuf);
+						}
+
 						free(emailBuf);
 					}
 
