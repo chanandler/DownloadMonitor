@@ -171,7 +171,7 @@ ActivationManager::ActivationManager()
 			SYSTEMTIME st = { 0 };
 			GetSystemTime(&st);
 
-			WCHAR buf[250];
+			WCHAR buf[512];
 			wsprintf(buf, L"%02d, %02d, %02d, %02d, %02d, %02d", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
 			EncryptDecryptString(&buf[0], APP_NAME);
@@ -237,11 +237,11 @@ int ActivationManager::GetRemainingTrialDays()
 		return false;
 	}
 
-	WCHAR buf[250];
-	ZeroMemory(buf, 250);
+	WCHAR buf[512];
+	ZeroMemory(buf, 512);
 
 	DWORD* bSize = new DWORD();
-	*bSize = 250;
+	*bSize = 512;
 	LSTATUS trialRes = RegQueryValueEx(kHandle, T_STATUS, NULL, NULL, (LPBYTE)&buf[0], bSize);
 
 	if (trialRes != ERROR_SUCCESS)
@@ -657,7 +657,7 @@ bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 
 	SERVER_RESPONSE servResp = ContactKeyServer(prvKey, key);
 
-	if (servResp == SERVER_RESPONSE::INVALID_KEY)
+	if (servResp != SERVER_RESPONSE::VALID_KEY)
 	{
 		return false;
 	}
