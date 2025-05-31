@@ -2410,18 +2410,7 @@ INT_PTR CALLBACK UIManager::ActivationProc(HWND hDlg, UINT message, WPARAM wPara
 					if (emailBuf)
 					{
 						GetWindowText(emailInput, emailBuf, lTextLen);
-
-						SERVER_RESPONSE servResp = instance->activationManager->ContactKeyServer(emailBuf, keyArr);
-
-						if (servResp == SERVER_RESPONSE::INVALID_KEY)
-						{
-							MessageBox(hDlg, L"This key is not registered with the activation server", L"Activation failed", MB_ICONERROR);
-						}
-						else
-						{
-							activationResult = instance->activationManager->TryActivate(keyArr, emailBuf);
-						}
-
+						activationResult = instance->activationManager->TryActivate(keyArr, emailBuf);
 						free(emailBuf);
 					}
 

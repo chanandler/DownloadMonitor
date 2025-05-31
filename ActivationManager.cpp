@@ -655,6 +655,13 @@ bool ActivationManager::TryActivate(int* key, wchar_t* prvKey)
 		memcpy(baseKey, key, sizeof(int) * KEY_SIZE);
 	}
 
+	SERVER_RESPONSE servResp = ContactKeyServer(prvKey, key);
+
+	if (servResp == SERVER_RESPONSE::INVALID_KEY)
+	{
+		return false;
+	}
+
 	EncryptDecryptKey(&key[0], prvKey);
 
 	if (!ValidateKey(key, prvKey))
