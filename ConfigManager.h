@@ -23,6 +23,7 @@
 #define CFG_DO_NOTHING "DO_NOTHING"
 
 #define DRAG_TO_EXPOSE_GRAPH "DRAG_TO_EXPOSE_GRAPH"
+#define ALWAYS_ON_TOP "ALWAYS_ON_TOP"
 
 enum FONT_ENUM
 {
@@ -111,6 +112,8 @@ public:
 
 	void UpdateBorderWH(int newWH);
 
+	void UpdateAlwaysOntop(bool newAot);
+
 	void GetFullConfigPath(char* buf);
 
 	void ApplyTheme(class Theme* newTheme);
@@ -128,6 +131,7 @@ public:
 	HOVER_ENUM hoverSetting;
 
 	bool dragToExposeGraph;
+	bool alwaysOnTop;
 
 	class ThemeManager* themeManagerRef;
 };

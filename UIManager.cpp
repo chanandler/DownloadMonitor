@@ -503,7 +503,7 @@ HWND UIManager::InitInstance(HINSTANCE hInstance, int nCmdShow)
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
-	SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	SetWindowPos(hWnd, configManager->alwaysOnTop ? HWND_TOPMOST : NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	//Tray icon
 	trayIcon.cbSize = sizeof(NOTIFYICONDATA);
@@ -639,7 +639,7 @@ void UIManager::OnSelectMonitorItem(int sel)
 	int finalX = newMonitorInfo.rcWork.left + (mWidth * nrmWindowX);
 	int finalY = newMonitorInfo.rcWork.top + (mHeight * nrmWindowY);
 
-	SetWindowPos(roothWnd, HWND_TOPMOST, finalX, finalY, 0, 0, SWP_NOSIZE);
+	SetWindowPos(roothWnd, NULL, finalX, finalY, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 	WriteWindowPos();
 }
 
@@ -1218,6 +1218,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					// 
 					//MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y - (windowHeight - instance->yDragOffset), windowWidth, windowHeight, TRUE);
 
+
 					MoveWindow(hWnd, mousePos.x - (windowWidth - instance->xDragOffset), mousePos.y, windowWidth, windowHeight, TRUE);
 					instance->adjustingPos = true;
 				}
@@ -1282,14 +1283,14 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					{
 						hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->downloadTxtColour);
 						prevPositions = &instance->dlGraphPositions;
-						startPos = dlRc.left;
-						widthLimit = dlRc.right;
+						startPos = dlRc.left; //Padding around graph lines so they don't touch eachother
+						widthLimit = dlRc.right * 0.95;
 					}
 					else //Upload
 					{
 						hPenUser = CreatePen(PS_SOLID, 1, *instance->configManager->uploadTxtColour);
 						prevPositions = &instance->ulGraphPositions;
-						startPos = dlRc.right;
+						startPos = dlRc.right * 1.05;
 						widthLimit = ulRc.right;
 					}
 
@@ -1297,6 +1298,7 @@ LRESULT CALLBACK UIManager::WndProc(HWND hWnd, UINT message, WPARAM wParam, LPAR
 					{
 						continue;
 					}
+
 					SelectObject(hdc, hPenUser);
 
 					float maxVal = 0.0;
@@ -1529,7 +1531,6 @@ void UIManager::UpdateForDPI(HWND hWnd, RECT* newRct)
 	int	scaledHeight = newRct->bottom - newRct->top;
 
 	SetWindowPos(hWnd, NULL, xPos, yPos, scaledWidth, scaledHeight, SWP_NOZORDER);
-	//SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 
 	WriteWindowPos();
 }
@@ -1560,7 +1561,7 @@ void UIManager::InitForDPI(HWND hWnd, int initialWidth, int initialHeight, int i
 		scaledX -= (scaledWidth * 0.95f); //Keep a little bit under cursor so drag-off check works
 	}
 
-	SetWindowPos(hWnd, NULL, scaledX, scaledY, scaledWidth, scaledHeight, NULL);
+	SetWindowPos(hWnd, NULL, scaledX, scaledY, scaledWidth, scaledHeight, SWP_NOZORDER);
 }
 
 bool UIManager::IsOffScreen()
@@ -1743,6 +1744,9 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 
 			HWND graphDragCkhBtn = GetDlgItem(hDlg, IDC_ALLOW_GRAPH_CHECK);
 			Button_SetCheck(graphDragCkhBtn, configManager->dragToExposeGraph);
+
+			HWND alwaysOnTopChkBtn = GetDlgItem(hDlg, IDC_ALWAYS_ON_TOP_CHECK);
+			Button_SetCheck(alwaysOnTopChkBtn, configManager->alwaysOnTop);
 
 			//Init dropdowns
 			SendMessage(hDlg, WM_SETCBSEL, (WPARAM)TRUE, NULL);
@@ -1999,6 +2003,21 @@ INT_PTR CALLBACK UIManager::SettingsProc(HWND hDlg, UINT message, WPARAM wParam,
 						instance->OnGraphClose();
 					}
 					configManager->UpdateDragToExposeGraph(enabled);
+				}
+				else if (LOWORD(wParam) == IDC_ALWAYS_ON_TOP_CHECK)
+				{
+					BOOL enabled = IsDlgButtonChecked(hDlg, IDC_ALWAYS_ON_TOP_CHECK);
+
+					if (!enabled)
+					{
+						SetWindowPos(instance->roothWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+					}
+					else
+					{
+						SetWindowPos(instance->roothWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+					}
+
+					configManager->UpdateAlwaysOntop(enabled);
 				}
 			}
 			else if (HIWORD(wParam) == CBN_SELCHANGE)

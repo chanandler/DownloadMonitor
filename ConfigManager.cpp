@@ -127,6 +127,12 @@ void ConfigManager::UpdateBorderWH(int newWH)
 	WriteData();
 }
 
+void ConfigManager::UpdateAlwaysOntop(bool newAot)
+{
+	alwaysOnTop = newAot;
+	WriteData();
+}
+
 void ConfigManager::GetFullConfigPath(char* buf)
 {
 	//Either pass in override dir or use appdata
@@ -220,13 +226,16 @@ void ConfigManager::WriteData()
 	char drag_graph_buf[200];
 	sprintf_s(drag_graph_buf, "%s=%s", DRAG_TO_EXPOSE_GRAPH, dragToExposeGraph ? "TRUE" : "FALSE");
 
+	char always_on_top_buf[200];
+	sprintf_s(always_on_top_buf, "%s=%s", ALWAYS_ON_TOP, alwaysOnTop ? "TRUE" : "FALSE");
+
 	char pathBuf[MAX_PATH];
 	GetFullConfigPath(pathBuf);
 	std::ofstream configFile(pathBuf);
 
 	// Write to the file
 	configFile << fg_Buf << "\n" << ch_Buf << "\n" << lp_Buf << "\n" << op_Buf << "\n" << fo_Buf << "\n" << ul_txt_Buf << "\n" << dl_txt_Buf << "\n"
-		<< adapter_buf << "\n" << hover_buf << "\n" << draw_border_buf << "\n" << border_w_h_buf << "\n" << drag_graph_buf << "\n";
+		<< adapter_buf << "\n" << hover_buf << "\n" << draw_border_buf << "\n" << border_w_h_buf << "\n" << drag_graph_buf << "\n" << always_on_top_buf << "\n";
 
 	configFile.close();
 }
@@ -437,6 +446,20 @@ bool ConfigManager::ReadData()
 			dragToExposeGraph = !strcmp(allowGraph, "TRUE");
 
 			free(allowGraph);
+			++readCount;
+		}
+		else if (!strncmp(output.c_str(), ALWAYS_ON_TOP, 13))
+		{
+			char* aOnTop = ProcessChar(dataStart);
+			if (!aOnTop)
+			{
+				invalidCfg = true;
+				break;
+			}
+
+			alwaysOnTop = !strcmp(aOnTop, "TRUE");
+
+			free(aOnTop);
 			++readCount;
 		}
 	}
@@ -760,6 +783,7 @@ void ConfigManager::InitDefaults()
 	strcpy_s(uniqueAddr, 32, "AUTO");
 	hoverSetting = HOVER_ENUM::SHOW_ALL;
 	dragToExposeGraph = true;
+	alwaysOnTop = true;
 
 	if (themeManagerRef)
 	{
